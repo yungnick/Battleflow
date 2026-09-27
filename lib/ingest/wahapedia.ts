@@ -21,7 +21,7 @@ const WAHAPEDIA_BASE = 'https://wahapedia.ru/wh40k11ed/factions'
 
 /** Identify the offline scraper so Wahapedia can attribute (and rate-limit) it fairly. */
 const USER_AGENT =
-  'battleflow-ingest (offline faction-data prep; https://github.com/mvpnick/Battleflow)'
+  'battleflow-ingest (offline faction-data prep; https://github.com/yungnick/Battleflow)'
 
 /** Stratagems for one detachment, keyed by the detachment's display name. */
 export type DetachmentStratagems = { name: string; stratagems: Strat[] }

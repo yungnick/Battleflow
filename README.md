@@ -45,7 +45,7 @@ Live: roster import, phase filtering, stratagems, detachment rules, and army rul
 
 ## Feedback
 
-Issues and ideas welcome on [GitHub](https://github.com/mvpnick/Battleflow/issues).
+Issues and ideas welcome on [GitHub](https://github.com/yungnick/Battleflow/issues).
 
 ---
 
