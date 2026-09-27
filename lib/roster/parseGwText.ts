@@ -26,6 +26,10 @@ const HAS_POINTS_RE = /\(\s*\d[\d\s,]*\s*(?:Points?|pts?)\s*\)/i
 // Matches a unit name line "Name (N pts)" or "Name (N Points)" — number must have no embedded spaces
 const UNIT_NAME_RE = /^(.+?)\s*\((\d[\d,]*)\s*(?:Points?|pts?)\)\s*$/i
 
+// Matches a detachment line carrying a "(N Detachment Points)" suffix, as emitted by the
+// GW Warhammer 40,000 App's plain-text export (distinct from a unit/army "(N Points)" line).
+const DETACHMENT_POINTS_RE = /^(.+?)\s*\(\s*\d[\d\s,]*\s*Detachment Points?\s*\)\s*$/i
+
 /**
  * Parse the GW My Army app text export, the New Recruit / BattleScribe army list format,
  * the BattleBase export format, or the New Recruit app plain-text export format.
@@ -153,8 +157,13 @@ export function parseGwText(raw: string): ParsedArmy {
  * header (CHARACTERS, BATTLELINE, …) or the first indented bullet, then:
  *   - lines with a parenthetical point value → army name or formation (skipped for
  *     faction detection; the first one supplies totalPoints)
+ *   - a line with a "(N Detachment Points)" suffix → the detachment name itself, however
+ *     many plain lines precede it. Space Marines chapter exports (GW App) put an extra
+ *     umbrella line ("Space Marines") before the chapter name ("Blood Angels"), so the
+ *     detachment isn't reliably the second plain line — the last plain line seen before
+ *     this one is the actual chapter/faction.
  *   - all-caps lines without digits → section-header noise, skipped
- *   - remaining lines → faction name (first), detachment (second)
+ *   - otherwise: remaining lines → faction name (first), detachment (second)
  */
 function extractPlainHeader(lines: string[]): {
   factionKeyword: string
@@ -163,6 +172,7 @@ function extractPlainHeader(lines: string[]): {
 } {
   const plainLines: string[] = []
   let totalPoints: number | undefined
+  let detachmentPointsLine: { name: string; factionKeyword: string } | undefined
 
   for (const line of lines) {
     const t = line.trim()
@@ -170,6 +180,17 @@ function extractPlainHeader(lines: string[]): {
 
     if (SECTION_RE.test(t)) break
     if (/^\s*[•◦]/.test(line)) break
+
+    const detMatch = t.match(DETACHMENT_POINTS_RE)
+    if (detMatch) {
+      if (!detachmentPointsLine) {
+        detachmentPointsLine = {
+          name: detMatch[1].trim(),
+          factionKeyword: plainLines[plainLines.length - 1] ?? plainLines[0] ?? '',
+        }
+      }
+      continue
+    }
 
     if (HAS_POINTS_RE.test(t)) {
       if (totalPoints === undefined) {
@@ -183,8 +204,8 @@ function extractPlainHeader(lines: string[]): {
   }
 
   return {
-    factionKeyword: plainLines[0] ?? '',
-    detachment: plainLines[1],
+    factionKeyword: detachmentPointsLine?.factionKeyword || plainLines[0] || '',
+    detachment: detachmentPointsLine?.name ?? plainLines[1],
     totalPoints,
   }
 }
