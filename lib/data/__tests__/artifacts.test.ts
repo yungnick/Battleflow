@@ -13,6 +13,8 @@ import csmArtifactRaw from '../../../public/data/factions/chaos-space-marines.js
 import ironHandsArtifactRaw from '../../../public/data/factions/iron-hands.json'
 import bloodAngelsArtifactRaw from '../../../public/data/factions/blood-angels.json'
 import gscArtifactRaw from '../../../public/data/factions/genestealer-cults.json'
+import drukhariArtifactRaw from '../../../public/data/factions/drukhari.json'
+import blackTemplarsArtifactRaw from '../../../public/data/factions/black-templars.json'
 
 describe('Deathwatch artifact', () => {
   const artifact = FactionArtifactSchema.parse(dwArtifactRaw)
@@ -37,6 +39,13 @@ describe('Chaos Space Marines artifact', () => {
   it('contains Fabius Bile', () => {
     const names = artifact.units.map((u) => u.name)
     expect(names).toContain('Fabius Bile')
+  })
+
+  it('attributes the "Raiders"-commented enhancements to Renegade Raiders, not Murdertalon Raiders', () => {
+    const enh = (name: string) =>
+      artifact.detachments.find((d) => d.name === name)?.enhancements?.map((e) => e.name) ?? []
+    expect(enh('Renegade Raiders')).toContain("Despot's Claim")
+    expect(enh('Murdertalon Raiders')).not.toContain("Despot's Claim")
   })
 
   it('surfaces Fabius Bile in every roster phase', () => {
@@ -73,6 +82,8 @@ describe('Detachment scoping', () => {
   const ironHands = FactionArtifactSchema.parse(ironHandsArtifactRaw)
   const bloodAngels = FactionArtifactSchema.parse(bloodAngelsArtifactRaw)
   const gsc = FactionArtifactSchema.parse(gscArtifactRaw)
+  const drukhari = FactionArtifactSchema.parse(drukhariArtifactRaw)
+  const blackTemplars = FactionArtifactSchema.parse(blackTemplarsArtifactRaw)
 
   // Merge in shared detachment sets exactly as the runtime loader does, so the assertions below
   // see each faction's complete detachment list (inline faction-specific + shared generic Codex).
@@ -105,10 +116,25 @@ describe('Detachment scoping', () => {
     expect(names(bloodAngels)).not.toContain('Champions of Russ') // Space Wolves
   })
 
-  it('shares the generic Codex set once across all chapters', () => {
-    // The generic detachments live in a shared set, not inline on each chapter artifact.
-    expect(bloodAngels.sharedDetachments?.length).toBe(1)
+  it('shares the generic Codex detachments rather than inlining them per chapter', () => {
+    // The generic detachments live in shared set(s), not inline on each chapter artifact. (Two
+    // sets, since Black Templars is excluded from 1st Company Task Force / Librarius Conclave.)
+    expect(bloodAngels.sharedDetachments?.length).toBeGreaterThan(0)
     expect(bloodAngels.detachments.map((d) => d.name)).not.toContain('Gladius Task Force')
+  })
+
+  it('keeps Drukhari and Asuryani detachments apart (no shared-library blending)', () => {
+    // The Aeldari Library holds both; BSData hides the Asuryani ones from a Drukhari primary.
+    expect(names(drukhari)).toContain('Realspace Raiders')
+    expect(names(drukhari)).not.toContain('Warhost')
+    expect(names(drukhari)).not.toContain('Aspect Host')
+  })
+
+  it('drops Codex detachments BSData hides from a specific chapter', () => {
+    expect(names(blackTemplars)).toContain('Gladius Task Force')
+    expect(names(blackTemplars)).not.toContain('Librarius Conclave')
+    expect(names(blackTemplars)).not.toContain('1st Company Task Force')
+    expect(names(bloodAngels)).toContain('Librarius Conclave')
   })
 
   it('does not leak ally-catalogue detachments into Genestealer Cults', () => {

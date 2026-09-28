@@ -309,6 +309,27 @@ function isSubsetOf(sub: Set<string>, sup: Set<string>): boolean {
 export interface EnhancementGroup {
   comment: string
   enhancements: Enhancement[]
+  /** BSData entry ids the group's visibility conditions reference (see {@link conditionChildIds}). */
+  referencedIds?: Set<string>
+}
+
+/**
+ * Every `childId` referenced by an entry's modifier conditions. An enhancement is hidden unless
+ * its detachment is selected, so these include the owning detachment's entry id — a structural
+ * tie-breaker when the free-text `comment` names more than one detachment.
+ */
+function conditionChildIds(entry: SelectionEntry): Set<string> {
+  const ids = new Set<string>()
+  const walk = (node: unknown) => {
+    if (Array.isArray(node)) return node.forEach(walk)
+    if (!node || typeof node !== 'object') return
+    const childId = (node as { childId?: unknown }).childId
+    if (typeof childId === 'string') ids.add(childId)
+    for (const v of Object.values(node)) walk(v)
+  }
+  walk(entry.modifiers)
+  walk((entry as { modifierGroups?: unknown }).modifierGroups)
+  return ids
 }
 
 /**
@@ -332,6 +353,7 @@ export interface EnhancementGroup {
  */
 export function extractEnhancements(ownedCatalogues: Catalogue[]): EnhancementGroup[] {
   const byOwner = new Map<string, Enhancement[]>()
+  const refsByOwner = new Map<string, Set<string>>()
   for (const cat of ownedCatalogues) {
     for (const group of cat.sharedSelectionEntryGroups?.selectionEntryGroup ?? []) {
       if (!isPrunedOption(group.name)) continue
@@ -347,10 +369,17 @@ export function extractEnhancements(ownedCatalogues: Catalogue[]): EnhancementGr
         const list = byOwner.get(owner) ?? []
         list.push(enhancementFromEntry(entry, owner))
         byOwner.set(owner, list)
+        const refs = refsByOwner.get(owner) ?? new Set<string>()
+        for (const id of conditionChildIds(entry)) refs.add(id)
+        refsByOwner.set(owner, refs)
       }
     }
   }
-  return [...byOwner.entries()].map(([comment, enhancements]) => ({ comment, enhancements }))
+  return [...byOwner.entries()].map(([comment, enhancements]) => ({
+    comment,
+    enhancements,
+    referencedIds: refsByOwner.get(comment),
+  }))
 }
 
 /**
@@ -361,16 +390,22 @@ export function extractEnhancements(ownedCatalogues: Catalogue[]): EnhancementGr
  * Matching is GLOBAL (every group is checked against every detachment) rather than
  * first-match, because a single-token comment can be a token-subset of more than one
  * detachment name in the same faction (Chaos Space Marines' "Raiders" is a subset of both
- * "Renegade Raiders" and "Murdertalon Raiders"). When more than one detachment matches, the
- * group is logged and skipped rather than guessed — misattributing enhancements to the wrong
- * detachment is worse than omitting them. Likewise a group matching zero detachments is
+ * "Renegade Raiders" and "Murdertalon Raiders"). When more than one detachment matches by name,
+ * the candidates are narrowed to those whose entry id the enhancements' visibility conditions
+ * reference (the "Raiders" enhancements are gated on Renegade Raiders being selected); if that
+ * still isn't exactly one, the group is logged and skipped rather than guessed — misattributing
+ * enhancements to the wrong detachment is worse than omitting them. Likewise a group matching zero detachments is
  * logged and skipped (comment text that doesn't resolve, e.g. a BSData-internal shorthand).
  */
 export function matchEnhancementGroups(groups: EnhancementGroup[], detachments: Detachment[]): void {
   const detachmentTokens = detachments.map(d => ({ det: d, tokens: wordTokens(d.name) }))
   for (const group of groups) {
     const groupTokens = wordTokens(group.comment)
-    const candidates = detachmentTokens.filter(({ tokens }) => isSubsetOf(groupTokens, tokens))
+    let candidates = detachmentTokens.filter(({ tokens }) => isSubsetOf(groupTokens, tokens))
+    if (candidates.length > 1 && group.referencedIds) {
+      const gated = candidates.filter(({ det }) => det.id && group.referencedIds!.has(det.id))
+      if (gated.length === 1) candidates = gated
+    }
     if (candidates.length === 1) {
       candidates[0].det.enhancements = group.enhancements
     } else if (candidates.length === 0) {
@@ -405,6 +440,30 @@ export function gatingChildIds(entry: SelectionEntry): string[] {
       if (c.type === 'notInstanceOf' && c.scope === 'primary-catalogue' && c.childId) {
         ids.push(c.childId)
       }
+    }
+  }
+  return ids
+}
+
+/**
+ * The catalogue ids a detachment entry is explicitly *hidden from* — the inverse of
+ * {@link gatingChildIds}. The shared Aeldari Library marks its Asuryani detachments (Warhost,
+ * Aspect Host, …) `hidden` when the primary catalogue is an `instanceOf` Drukhari, so a Drukhari
+ * army never offers them. Only unconditional and OR-grouped conditions count: inside an AND group
+ * `instanceOf` alone doesn't hide the entry.
+ */
+export function excludedCatalogueIds(entry: SelectionEntry): string[] {
+  const ids: string[] = []
+  for (const mod of entry.modifiers?.modifier ?? []) {
+    if (mod.field !== 'hidden' || mod.value !== 'true') continue
+    const conditions = [
+      ...(mod.conditions?.condition ?? []),
+      ...(mod.conditionGroups?.conditionGroup ?? [])
+        .filter(g => g.type === 'or')
+        .flatMap(g => g.conditions?.condition ?? []),
+    ]
+    for (const c of conditions) {
+      if (c.type === 'instanceOf' && c.scope === 'primary-catalogue' && c.childId) ids.push(c.childId)
     }
   }
   return ids
@@ -482,6 +541,8 @@ export function extractDetachments(
       // Gate-filter: drop chapter/sub-faction detachments not belonging to this primary.
       const gate = gatingChildIds(entry)
       if (gate.length > 0 && !gate.includes(primaryCatalogueId)) continue
+      // ...and detachments BSData explicitly hides from this primary (Asuryani ones for Drukhari).
+      if (excludedCatalogueIds(entry).includes(primaryCatalogueId)) continue
 
       const det = entryToDetachment(entry, index)
       if (det) detachments.push(det)

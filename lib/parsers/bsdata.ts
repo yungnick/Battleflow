@@ -126,7 +126,7 @@ export interface Modifier {
   field: string
   value: string
   conditions?: { condition?: Condition[] }
-  conditionGroups?: { conditionGroup?: { conditions?: { condition?: Condition[] } }[] }
+  conditionGroups?: { conditionGroup?: { type?: string; conditions?: { condition?: Condition[] } }[] }
 }
 
 export interface SelectionEntry {

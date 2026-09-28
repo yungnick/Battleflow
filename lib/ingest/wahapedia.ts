@@ -78,11 +78,52 @@ function toTitleCase(name: string): string {
     .join(' ')
 }
 
+/**
+ * Repair Wahapedia's misnested bold markup. Keyword tooltips come out as e.g.
+ * `<b><span><span><b>selected</span> … attack</b></span></span></b>` or
+ * `<span><span><b>[IGNORES</span> <span>COVER]</b></span></span>` — a `<b>` that opens and closes
+ * inside different `<span>`s. Browsers repair that; node-html-parser instead unwinds the
+ * enclosing `<div>`s, detaching the rest of the card from its `.str11Wrap` so the stratagem is
+ * silently lost (e.g. all of AdMech's Luminen Auto-choir). Such `<b>` pairs — and any `<b>`
+ * nested inside another `<b>` — are purely cosmetic, so both tags are dropped; well-formed
+ * top-level labels like `<b>WHEN:</b>` are untouched.
+ */
+function repairBoldNesting(html: string): string {
+  const drop = new Set<number>()
+  const open: { at: number; span: number; nested: boolean }[] = []
+  const spans: number[] = [] // stack of open-span ids; a `<b>` must close inside the span it opened in
+  let nextSpan = 1
+  for (const m of html.matchAll(/<(\/?)(b|span)\b[^>]*>/gi)) {
+    const closing = m[1] === '/'
+    const top = spans.at(-1) ?? 0
+    if (m[2].toLowerCase() === 'span') {
+      if (closing) spans.pop()
+      else spans.push(nextSpan++)
+    } else if (!closing) {
+      open.push({ at: m.index!, span: top, nested: open.length > 0 })
+    } else {
+      const b = open.pop()
+      if (b && (b.nested || b.span !== top)) {
+        drop.add(b.at)
+        drop.add(m.index!)
+      }
+    }
+  }
+  if (drop.size === 0) return html
+  return html.replace(/<\/?b>/gi, (tag, offset: number) => (drop.has(offset) ? '' : tag))
+}
+
+/** Parse a Wahapedia page (or fragment) after repairing its known misnesting. */
+function parsePage(html: string) {
+  return parse(repairBoldNesting(html))
+}
+
 /** Decode an HTML fragment to clean, single-spaced plain text. */
 function htmlToText(html: string): string {
-  // Convert <br> to spaces so sentences either side don't fuse; parse() then strips the
-  // remaining tags (tooltips, keyword spans, links) and decodes HTML entities.
-  return parse(html.replace(/<br\s*\/?>/gi, ' '))
+  // Convert <br> and block-level tag boundaries (11e effects are often `<ul><li>` option lists,
+  // and "+1CP" upgrades sit in nested <div>s) to spaces so text either side doesn't fuse;
+  // parse() then strips the remaining tags (tooltips, keyword spans, links) and decodes entities.
+  return parse(html.replace(/<br\s*\/?>|<\/?(?:li|ul|ol|div|p)\b[^>]*>/gi, ' '))
     .text.replace(/\s+/g, ' ')
     .trim()
 }
@@ -193,7 +234,7 @@ function parseCard(card: HTMLElement, source: string): { group: string; strat: S
  */
 export function parseStratagems(html: string, source: string): DetachmentStratagems[] {
   const groups = new Map<string, Strat[]>()
-  for (const card of parse(html).querySelectorAll('.str11Wrap')) {
+  for (const card of parsePage(html).querySelectorAll('.str11Wrap')) {
     const parsed = parseCard(card, source)
     if (!parsed) continue
     const list = groups.get(parsed.group) ?? []
@@ -220,7 +261,7 @@ export async function scrapeFaction(slug: string, source: string): Promise<Detac
 
 /** Names of every real (non-alt-game-mode) detachment on a faction page. */
 export function parseRealDetachmentNames(html: string): Set<string> {
-  const root = parse(html)
+  const root = parsePage(html)
   const names = new Set<string>()
   for (const h2 of root.querySelectorAll('h2.outline_header')) {
     const badge = h2.querySelector('.dpPts')
@@ -264,7 +305,7 @@ function parseEnhancementNameCard(ul: HTMLElement): { name: string; upgrade: boo
  * not included — `EnhancementSchema.kind` is absent/undefined for those, the common case.
  */
 export function parseEnhancementKinds(html: string): DetachmentEnhancementKinds[] {
-  const root = parse(html)
+  const root = parsePage(html)
   const groups = new Map<string, string[]>()
   let currentDet: string | null = null
 

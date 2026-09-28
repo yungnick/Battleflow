@@ -144,4 +144,39 @@ describe('parseStratagems', () => {
     expect(effect).toContain('Your unit shoots.')
     expect(effect).toContain('While Shooting: Only one target.')
   })
+
+  it('survives Wahapedia\'s misnested bold tooltips without losing the card or its neighbours', () => {
+    // Real shapes from the AdMech page: a <b> nested in <b> that straddles spans, and a lone <b>
+    // that opens and closes inside different spans. Unrepaired, node-html-parser unwinds the
+    // card's <div>s and both cards vanish.
+    const html =
+      stratCard(
+        'ECHOES OF THE CONDUIT WARS',
+        'Luminen Auto-choir Stratagem',
+        '1CP',
+        '<b>WHEN:</b> When a unit is <b><span class="tip"><span class="tt"><b>selected</span> <span class="tt">to</span> <span class="tt">attack</b></span></span></b>.<br><br><b>EFFECT:</b> Re-roll.',
+      ) +
+      stratCard(
+        'DEFECT SCRUTINY',
+        'Cohort Acquisitus Stratagem',
+        '1CP',
+        '<b>WHEN:</b> Your Shooting phase.<br><br><b>EFFECT:</b> Attacks have <span class="kwb"><span class="tip"><span class="tt"><b>[IGNORES</span> <span class="tt">COVER]</b></span></span></span>.',
+      )
+    const groups = parseStratagems(html, 'Adeptus Mechanicus')
+    expect(groups.map((g) => g.name)).toEqual(['Luminen Auto-choir', 'Cohort Acquisitus'])
+    expect(groups[0].stratagems[0]).toMatchObject({ timing: 'When a unit is selected to attack.', effect: 'Re-roll.' })
+    expect(groups[1].stratagems[0].effect).toBe('Attacks have [IGNORES COVER].')
+  })
+
+  it('separates list items and nested +CP option blocks instead of fusing sentences', () => {
+    const html = stratCard(
+      'MOW ’EM DOWN',
+      'War Horde Stratagem',
+      '1CP',
+      '<b>EFFECT:</b> Roll one D3:<br><ul><li>Suffer mortal wounds.</li><li><u>Or:</u> No longer <b>battle-shocked</b>.</li></ul>' +
+        '<div class="str11Text2"><div class="str11CP2">+1CP</div><u>Or:</u> Re-roll.</div>',
+    )
+    const effect = parseStratagems(html, 'Orks')[0].stratagems[0].effect
+    expect(effect).toBe('Roll one D3: Suffer mortal wounds. Or: No longer battle-shocked. +1CP Or: Re-roll.')
+  })
 })

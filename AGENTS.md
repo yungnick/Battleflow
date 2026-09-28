@@ -26,8 +26,12 @@ into small, self-contained per-faction JSON artifacts committed under `public/da
     (for "library" factions like AM / Chaos Daemons / Aeldari), and any imported *chaptered codex*
     (a detachment group carrying `primary-catalogue` gating — the SM codex / Aeldari library).
     `extractDetachments` then gate-filters per chapter via `gatingChildIds`: a detachment is kept
-    only if it is ungated, or gated to the faction's own catalogue id. Without this, factions leak
-    each other's detachments and the 12 SM chapters each store the full 53-detachment union.
+    only if it is ungated, or gated to the faction's own catalogue id — and it is dropped if BSData
+    explicitly hides it from that primary (`excludedCatalogueIds`: an `instanceOf` primary-catalogue
+    condition, e.g. the Aeldari Library's Asuryani detachments for Drukhari, or Librarius Conclave /
+    1st Company Task Force for Black Templars). Different factions must never blend detachments.
+    Without this, factions leak each other's detachments and the 12 SM chapters each store the full
+    53-detachment union.
 - **Wahapedia stratagem ingestion (offline)** — `lib/ingest/wahapedia.ts` (scraper) +
   `wahapediaCli.ts` (CLI) + `wahapediaFactions.ts` (faction→slug map). Scrapes the static faction
   pages, groups stratagem cards by detachment, and merges them into each existing artifact's
@@ -112,9 +116,6 @@ into small, self-contained per-faction JSON artifacts committed under `public/da
   detachments).
 - **Detachment scoping mirrors BSData visibility, not a hand-curated legal list.** A few results
   follow BSData rather than intuition: `adeptus-titanicus` / `titanicus-traitoris` get 0
-  detachments (a separate game system, no detachment group of their own), and Drukhari keeps the
-  ungated Aeldari-library detachments alongside its own (BSData leaves them visible in any
-  Aeldari-primary roster). See `docs/detachment-scoping-plan.md` for the full rule + per-faction
-  counts.
+  detachments (a separate game system, no detachment group of their own).
 - **Licensing:** `BSData/wh40k-10e` has no explicit license; Warhammer 40,000 is Games Workshop
   IP. Distributing this data in a public product is a legal question for the project owner.
