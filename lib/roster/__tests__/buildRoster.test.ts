@@ -146,6 +146,51 @@ describe('buildRoster – army & detachment rules', () => {
   })
 })
 
+// ── Multiple detachments (11e) ────────────────────────────────────────────────
+
+describe('buildRoster – multiple detachments', () => {
+  const det = (name: string, rule: string, strat: string, enh: string) => ({
+    id: `det-${name}`,
+    name,
+    rules: [{ id: `r-${rule}`, name: rule, timing: '', effect: 'Effect.', source: name }],
+    stratagems: [{ name: strat, timing: 'Any phase', cp: 1, effect: 'Do stuff.', source: name }],
+    enhancements: [{ id: `e-${enh}`, name: enh, timing: '', effect: 'Enh.', source: name }],
+  })
+  const artifact = makeArtifact({
+    detachments: [
+      det('Changehost of Deceit', 'Deceit Rule', 'Deceit Strat', 'Deceit Enh'),
+      det('Ritual of Regeneration', 'Regen Rule', 'Regen Strat', 'Tome of True Names'),
+      det('Grand Coven', 'Coven Rule', 'Coven Strat', 'Coven Enh'),
+    ],
+  })
+
+  it('resolves every detachment named on a joined line', () => {
+    const parsed: ParsedArmy = {
+      factionKeyword: 'Thousand Sons',
+      detachment: 'Changehost of Deceit and Ritual of Regeneration',
+      units: [{ name: 'Bloodthirster', wargear: [], enhancements: ['Tome of True Names'] }],
+    }
+    const { roster, meta } = buildRoster(parsed, artifact)
+    expect(meta.detachmentMatched).toBe(true)
+    expect(meta.detachmentRules.map(r => r.name)).toEqual(['Deceit Rule', 'Regen Rule'])
+    expect(meta.stratagems?.map(s => s.name)).toEqual(['Deceit Strat', 'Regen Strat'])
+    // Enhancements resolve against every fielded detachment, not just the first.
+    expect(roster.command?.[0].enhancements.map(e => e.name)).toEqual(['Tome of True Names'])
+  })
+
+  it.each([
+    'Changehost of Deceit, Ritual of Regeneration',
+    'Changehost of Deceit + Ritual of Regeneration',
+    'Changehost of Deceit / Ritual of Regeneration',
+    'Changehost of Deceit & Ritual of Regeneration',
+    'Detachments: Changehost of Deceit | Ritual of Regeneration (3 DP)',
+  ])('matches known names regardless of separator: %s', detachment => {
+    const parsed: ParsedArmy = { factionKeyword: 'Thousand Sons', detachment, units: [] }
+    const { meta } = buildRoster(parsed, artifact)
+    expect(meta.detachmentRules.map(r => r.name)).toEqual(['Deceit Rule', 'Regen Rule'])
+  })
+})
+
 // ── Unit building ─────────────────────────────────────────────────────────────
 
 describe('buildRoster – unit matching', () => {

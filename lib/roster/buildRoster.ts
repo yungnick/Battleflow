@@ -156,6 +156,54 @@ function buildDetachmentAbilityMap(
   return map
 }
 
+/**
+ * Resolve a roster's detachment line to the artifact detachment(s) it names.
+ *
+ * 11e lists can field several detachments, which exports join onto one line in
+ * app-specific ways ("A and B", "A, B", "A + B", …). An exact match is tried first;
+ * otherwise every known detachment name found in the line (on word boundaries) is
+ * taken, longest first, consuming its span so a shorter name can't re-match inside a
+ * longer one. No separator is assumed — whatever sits between the names is ignored —
+ * so any export format works, and names containing "and" stay intact. A trailing parenthetical
+ * ("Daemonic Incursion (Warp Rifts)") is ignored. Results are in list order.
+ */
+function resolveDetachments(
+  raw: string | undefined,
+  detachments: FactionArtifact['detachments'],
+): FactionArtifact['detachments'] {
+  if (!raw) return []
+  const stripParen = (s: string) => s.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  const candidates = [norm(raw), norm(stripParen(raw))]
+
+  const exact = detachments.find(d => candidates.includes(norm(d.name)))
+  if (exact) return [exact]
+
+  let remaining = candidates[1]
+  const found: { det: FactionArtifact['detachments'][number]; at: number }[] = []
+  const byLength = [...detachments].sort((a, b) => b.name.length - a.name.length)
+  for (const det of byLength) {
+    const name = norm(det.name)
+    if (!name) continue
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const m = new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).exec(remaining)
+    if (!m) continue
+    const at = m.index + m[1].length
+    found.push({ det, at })
+    remaining = remaining.slice(0, at) + ' '.repeat(name.length) + remaining.slice(at + name.length)
+  }
+  return found.sort((a, b) => a.at - b.at).map(f => f.det)
+}
+
+function dedupByName<T extends { name: string }>(items: T[]): T[] {
+  const seen = new Set<string>()
+  return items.filter(i => {
+    const key = norm(i.name)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 export type RosterMeta = {
   factionName: string
   detachment?: string
@@ -163,9 +211,9 @@ export type RosterMeta = {
   stratagems?: Strat[]
   /** The faction's army rule(s), flagged in the glossary at ingest (e.g. Oath of Moment). */
   armyRules: GlossaryRule[]
-  /** Rules of the matched detachment; empty when no detachment matched. */
+  /** Rules of the matched detachment(s); empty when no detachment matched. */
   detachmentRules: DetachmentRule[]
-  /** Whether `parsed.detachment` resolved to a known detachment in the artifact. */
+  /** Whether `parsed.detachment` resolved to at least one known detachment in the artifact. */
   detachmentMatched: boolean
 }
 
@@ -196,33 +244,29 @@ export function buildRoster(
     detachmentMatched: false,
   }
 
-  // Strip parenthetical suffixes (e.g. "Daemonic Incursion (Warp Rifts)" → "Daemonic Incursion")
-  // during comparison only; the raw parsed.detachment is preserved for display.
-  const stripParen = (s: string) => s.replace(/\s*\([^)]*\)\s*$/, '').trim()
-  const detNorm = norm(parsed.detachment ?? '')
-  const detNormStripped = norm(stripParen(parsed.detachment ?? ''))
-  const matchedDetachment = artifact.detachments.find(d => {
-    const dn = norm(d.name)
-    return dn === detNorm || dn === detNormStripped
-  })
-  if (matchedDetachment) {
-    meta.stratagems = matchedDetachment.stratagems
-    meta.detachmentRules = matchedDetachment.rules
+  const matchedDetachments = resolveDetachments(parsed.detachment, artifact.detachments)
+  if (matchedDetachments.length > 0) {
+    // Union across every detachment in the list (11e armies can field several, e.g.
+    // "Changehost of Deceit and Ritual of Regeneration"). Dedupe by name so a rule or
+    // stratagem shared between two detachments isn't listed twice.
+    meta.stratagems = dedupByName(matchedDetachments.flatMap(d => d.stratagems))
+    meta.detachmentRules = dedupByName(matchedDetachments.flatMap(d => d.rules))
     meta.detachmentMatched = true
   }
 
-  // Index the matched detachment's enhancements once per build, so each unit can
+  // Index the matched detachments' enhancements once per build, so each unit can
   // resolve its army-list enhancement bullets to the full Rule (for the drawer).
   const enhancementsByKey = new Map<string, Rule>()
-  for (const enh of matchedDetachment?.enhancements ?? []) {
+  for (const enh of matchedDetachments.flatMap(d => d.enhancements ?? [])) {
     enhancementsByKey.set(norm(enh.name), enh)
   }
 
   // Build a map of abilities that are granted by a specific detachment's rules.
   // When a detachment is matched, abilities belonging to OTHER detachments are
-  // filtered out — they don't apply to this army's active detachment.
+  // filtered out — they don't apply to this army's active detachment(s).
   // If no detachment is matched (unknown/new detachment), filtering is skipped.
   const detachmentAbilityMap = buildDetachmentAbilityMap(artifact.detachments)
+  const activeDetachmentNames = new Set(matchedDetachments.map(d => norm(d.name)))
 
   for (const parsedUnit of parsed.units) {
     const matched = matchUnit(parsedUnit.name, artifact.units)
@@ -245,13 +289,13 @@ export function buildRoster(
     // Drop abilities granted by a different detachment's rule.
     // Only active when the roster's detachment was recognised; if unknown we
     // show everything so no data is silently lost for new / synthesized detachments.
-    const baseAbilities = matchedDetachment
+    const baseAbilities = matchedDetachments.length > 0
       ? strippedAbilities.filter(a => {
           const grantingDetachment = detachmentAbilityMap.get(norm(a.name))
           // Not in the map → unit-native ability, always keep.
-          // In the map and matches active detachment → keep.
-          // In the map but different detachment → drop.
-          return !grantingDetachment || norm(grantingDetachment) === norm(matchedDetachment.name)
+          // In the map and granted by an active detachment → keep.
+          // In the map but a different detachment → drop.
+          return !grantingDetachment || activeDetachmentNames.has(norm(grantingDetachment))
         })
       : strippedAbilities
 
