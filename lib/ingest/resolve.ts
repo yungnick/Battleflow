@@ -184,6 +184,13 @@ function applyNameModifiers(base: string, modifiers: any[]): string {
 function hasUnitProfile(node: BsNode, index: BsIndex, seen = new Set<string>(), depth = 0): boolean {
   if (!node || depth > 8) return false
   for (const p of node.profiles?.profile ?? []) if (STAT_TYPES.has(p.typeName)) return true
+  // Stat profiles may also be shared and pulled in by reference (11e Codex: Orks does this
+  // for Nobz / Meganobz / Tankbustas, whose model entries infoLink a shared "Unit" profile).
+  for (const l of node.infoLinks?.infoLink ?? []) {
+    if (l.type !== 'profile') continue
+    const t = index.get(l.targetId) as Profile | undefined
+    if (t && STAT_TYPES.has(t.typeName)) return true
+  }
   for (const l of node.entryLinks?.entryLink ?? []) {
     if (seen.has(l.targetId)) continue
     seen.add(l.targetId)
@@ -208,22 +215,32 @@ export function enumerateUnits(
   index: BsIndex,
   coreRuleIds: Set<string> = new Set(),
 ): ResolvedUnit[] {
-  const roots: BsNode[] = []
+  const roots: { node: BsNode; linkFactions: string[] }[] = []
   const seenRoot = new Set<string>()
 
-  const consider = (node: BsNode | undefined) => {
+  const consider = (node: BsNode | undefined, link?: BsNode) => {
     if (!node || typeof node.id !== 'string' || seenRoot.has(node.id)) return
     if (!hasUnitProfile(node, index)) return
     seenRoot.add(node.id)
-    roots.push(node)
+    const linkFactions = (link?.categoryLinks?.categoryLink ?? [])
+      .map((c: { name?: string }) => c.name ?? '')
+      .filter((n: string) => n.startsWith('Faction: '))
+    roots.push({ node, linkFactions })
   }
 
   for (const cat of catalogues) {
-    for (const link of cat.entryLinks?.entryLink ?? []) consider(index.get(link.targetId))
+    for (const link of cat.entryLinks?.entryLink ?? []) consider(index.get(link.targetId), link)
     for (const entry of cat.selectionEntries?.selectionEntry ?? []) consider(entry)
   }
 
-  return roots.map((root) => collectUnit(root, index, coreRuleIds))
+  return roots.map(({ node, linkFactions }) => {
+    const unit = collectUnit(node, index, coreRuleIds)
+    // BattleScribe lets the root entryLink carry categories for the linked entry. Some shared
+    // entries (e.g. Agents of the Imperium's Legends Kill Teams) tag "Faction: X" only there;
+    // without it they'd look faction-agnostic and pass every Imperium faction's filter.
+    if (!unit.keywords.some((k) => k.startsWith('Faction: '))) unit.keywords.push(...linkFactions)
+    return unit
+  })
 }
 
 /**
