@@ -133,6 +133,11 @@ function filterWeapons(weapons: Weapon[], wargearSet: Set<string>): Weapon[] {
  *
  * Returns a map of normalised ability name → the detachment name that grants it.
  * Used at roster-build time to filter abilities that belong to a different detachment.
+ *
+ * Fallback only: the structural gate (`UnitAbility.detachments`, see
+ * {@link isActiveForDetachments}) now covers every ability this prose match catches in the
+ * committed data (checked at BSData 951d590). Kept for detachments whose grant is described in
+ * prose but not modelled as a BSData `hidden` modifier.
  */
 function buildDetachmentAbilityMap(
   detachments: FactionArtifact['detachments'],
@@ -154,6 +159,19 @@ function buildDetachmentAbilityMap(
   }
 
   return map
+}
+
+/**
+ * Apply an ability's structural detachment gate (`UnitAbility.detachments` /
+ * `exceptDetachments`, read from BSData `hidden` modifiers at ingest — see
+ * lib/ingest/visibility.ts). An ability gated to detachments shows only while one of them is
+ * in the roster; with no detachment matched it is hidden, since it is conditional by
+ * construction (e.g. Gloam Rot on Nurgle daemons exists only in a Shadow Legion army).
+ */
+function isActiveForDetachments(ability: UnitAbility, activeIds: Set<string>): boolean {
+  if (ability.detachments && !ability.detachments.some(id => activeIds.has(id))) return false
+  if (ability.exceptDetachments?.some(id => activeIds.has(id))) return false
+  return true
 }
 
 /**
@@ -267,6 +285,7 @@ export function buildRoster(
   // If no detachment is matched (unknown/new detachment), filtering is skipped.
   const detachmentAbilityMap = buildDetachmentAbilityMap(artifact.detachments)
   const activeDetachmentNames = new Set(matchedDetachments.map(d => norm(d.name)))
+  const activeDetachmentIds = new Set(matchedDetachments.map(d => d.id))
 
   for (const parsedUnit of parsed.units) {
     const matched = matchUnit(parsedUnit.name, artifact.units)
@@ -289,15 +308,16 @@ export function buildRoster(
     // Drop abilities granted by a different detachment's rule.
     // Only active when the roster's detachment was recognised; if unknown we
     // show everything so no data is silently lost for new / synthesized detachments.
+    const gatedAbilities = strippedAbilities.filter(a => isActiveForDetachments(a, activeDetachmentIds))
     const baseAbilities = matchedDetachments.length > 0
-      ? strippedAbilities.filter(a => {
+      ? gatedAbilities.filter(a => {
           const grantingDetachment = detachmentAbilityMap.get(norm(a.name))
           // Not in the map → unit-native ability, always keep.
           // In the map and granted by an active detachment → keep.
           // In the map but a different detachment → drop.
           return !grantingDetachment || activeDetachmentNames.has(norm(grantingDetachment))
         })
-      : strippedAbilities
+      : gatedAbilities
 
     // Split parsed enhancement names: those matching a known detachment enhancement
     // become clickable Rule chips; the rest fall back to plain hot chips (covers

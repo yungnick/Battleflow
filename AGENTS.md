@@ -32,6 +32,20 @@ into small, self-contained per-faction JSON artifacts committed under `public/da
     1st Company Task Force for Black Templars). Different factions must never blend detachments.
     Without this, factions leak each other's detachments and the 12 SM chapters each store the full
     53-detachment union.
+- **Ability visibility gating (offline)** — `lib/ingest/visibility.ts`. BSData hides many unit
+  abilities behind `hidden` modifiers rather than omitting them: detachment abilities linked onto
+  every eligible datasheet (Gloam Rot on Nurgle daemons → Shadow Legion; each Necron detachment
+  rule on every Necron unit), army rules restricted to one primary catalogue (Templar Vows →
+  Black Templars only, though all 12 chapters link it), and Boarding Actions / Crusade variants.
+  The unit walk (`collectUnit` in `resolve.ts`) evaluates these on every node along an ability's
+  path: primary-catalogue and force (Boarding Actions / Crusade) conditions resolve statically,
+  as do conditions on another faction's detachment (never selected). Abilities that can never be
+  visible are dropped. Ones that depend on this faction's detachment are evaluated once per
+  detachment and stored as `UnitAbility.detachments` (only with) / `exceptDetachments` (not
+  with); `buildRoster` applies them against the roster's matched detachment ids and hides
+  `detachments`-gated abilities when no detachment matched. Wargear / unit-local conditions
+  (`self`, `parent`, `ancestor`, `model-or-unit`, …) are not evaluated and always resolve toward
+  visible.
 - **Wahapedia stratagem ingestion (offline)** — `lib/ingest/wahapedia.ts` (scraper) +
   `wahapediaCli.ts` (CLI) + `wahapediaFactions.ts` (faction→slug map). Scrapes the static faction
   pages, groups stratagem cards by detachment, and merges them into each existing artifact's

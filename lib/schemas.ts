@@ -131,6 +131,14 @@ export const UnitAbilitySchema = RuleSchema.extend({
    * read it from there.
    */
   groupBlurb: z.string().optional(),
+  /**
+   * Detachment gate, read from BSData `hidden` modifiers at ingest (lib/ingest/visibility.ts).
+   * When present, the ability applies only while one of these detachment ids is in the roster
+   * (e.g. Gloam Rot on Nurgle daemons → Shadow Legion). Absent = no detachment condition.
+   */
+  detachments: z.array(z.string()).optional(),
+  /** Inverse gate: the ability applies unless one of these detachment ids is in the roster. */
+  exceptDetachments: z.array(z.string()).optional(),
 })
 
 // ---------------------------------------------------------------------------
