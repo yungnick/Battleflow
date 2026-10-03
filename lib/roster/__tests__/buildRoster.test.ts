@@ -555,3 +555,60 @@ describe('buildRoster – structured abilities', () => {
     expect(unit.abilities.map(a => a.name)).not.toContain(unit.damaged!.name)
   })
 })
+
+// ── Structural detachment gates ───────────────────────────────────────────────
+
+describe('buildRoster – detachment-gated abilities', () => {
+  // Gloam Rot is a Shadow Legion ability BSData links onto every Nurgle daemon.
+  const artifact = makeArtifact({
+    detachments: [
+      { id: 'det-shadow', name: 'Shadow Legion', rules: [], stratagems: [] },
+      { id: 'det-plague', name: 'Plague Legion', rules: [], stratagems: [] },
+    ],
+    units: [
+      {
+        id: 'unit-pb',
+        bsId: 'bs-pb',
+        name: 'Plaguebearers',
+        role: 'battleline',
+        models: 10,
+        hot: [],
+        weapons: [],
+        abilities: [
+          { name: 'Infected Outbreak', timing: '', effect: 'Sticky objectives.', source: 'Chaos Daemons', category: 'datasheet' },
+          { name: 'Gloam Rot', timing: '', effect: 'Subtract 1 from the Wound roll.', source: 'Chaos Daemons', category: 'datasheet', detachments: ['det-shadow'] },
+          { name: 'Plague Ward', timing: '', effect: 'Not with Plague Legion.', source: 'Chaos Daemons', category: 'datasheet', exceptDetachments: ['det-plague'] },
+        ],
+        stratagems: [],
+        reminders: [],
+        tags: [],
+        keywords: ['Chaos Daemons'],
+        ruleRefs: [],
+      },
+    ],
+  })
+  const namesFor = (detachment: string | undefined) => {
+    const parsed: ParsedArmy = {
+      factionKeyword: 'CHAOS DAEMONS',
+      detachment,
+      units: [{ name: 'Plaguebearers', wargear: [], enhancements: [] }],
+    }
+    const { roster } = buildRoster(parsed, artifact)
+    return roster.command!.find(u => u.name === 'Plaguebearers')!.abilities.map(a => a.name)
+  }
+
+  it('hides a gated ability when its detachment is not in the roster', () => {
+    const names = namesFor('Plague Legion')
+    expect(names).toContain('Infected Outbreak')
+    expect(names).not.toContain('Gloam Rot')
+    expect(names).not.toContain('Plague Ward')
+  })
+
+  it('shows a gated ability when its detachment is in the roster', () => {
+    expect(namesFor('Shadow Legion')).toEqual(['Infected Outbreak', 'Gloam Rot', 'Plague Ward'])
+  })
+
+  it('hides detachment-only abilities when no detachment matched', () => {
+    expect(namesFor(undefined)).toEqual(['Infected Outbreak', 'Plague Ward'])
+  })
+})

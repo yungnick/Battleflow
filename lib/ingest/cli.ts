@@ -12,7 +12,8 @@ import {
   collectGstRuleIds,
   enumerateUnits,
 } from './resolve'
-import { extractDetachments, selectOwnedCatalogues } from './detachments'
+import { allDetachmentEntryIds, extractDetachments, legalDetachmentEntries, selectOwnedCatalogues } from './detachments'
+import { collectForceEntryIds, type VisibilityContext } from './visibility'
 import { toFactionArtifact } from './normalize'
 import { prepareArtifact, writeArtifact, writeManifest, type EmitResult } from './emit'
 import { DATA_SCHEMA_VERSION, type DataManifest } from '../dataModel'
@@ -159,7 +160,19 @@ async function main() {
     const allCats = chain.map((c) => c.catalogue)
     const index = buildIndex([gst, ...allCats], crusadeIds)
     const enumerable = chain.filter((c) => c.enumerateRoots).map((c) => c.catalogue)
-    const units = enumerateUnits(enumerable, index, coreRuleIds)
+    // Scope detachments to the faction's own catalogue(s), dropping the ally catalogues its
+    // chain imports for roster-building, then gate-filter chapter/sub-faction detachments.
+    const ownedCats = selectOwnedCatalogues(allCats, faction, index)
+    const detachments = extractDetachments(ownedCats, index, faction.id)
+    // Honour BSData `hidden` modifiers on unit abilities (see visibility.ts): primary-catalogue
+    // and force gates resolve here; detachment gates are carried onto the artifact.
+    const visibility: VisibilityContext = {
+      primaryCatalogueId: faction.id,
+      factionDetachmentIds: legalDetachmentEntries(ownedCats, index, faction.id).map((e) => e.id),
+      allDetachmentIds: allDetachmentEntryIds(allCats, index),
+      forceEntryIds: collectForceEntryIds([gst, ...allCats]),
+    }
+    const units = enumerateUnits(enumerable, index, coreRuleIds, visibility)
 
     // Derive the "Faction: X" keywords that belong to this faction (see keywords.ts).
     const factionKeywords = deriveFactionKeywords(chain, units, slug, index)
@@ -175,10 +188,6 @@ async function main() {
       const unitFactionKws = u.keywords.filter((k) => k.startsWith('Faction: '))
       return unitFactionKws.every((k) => factionKwSet.has(k))
     })
-    // Scope detachments to the faction's own catalogue(s), dropping the ally catalogues its
-    // chain imports for roster-building, then gate-filter chapter/sub-faction detachments.
-    const ownedCats = selectOwnedCatalogues(allCats, faction, index)
-    const detachments = extractDetachments(ownedCats, index, faction.id)
     const artifact = toFactionArtifact(faction, filteredUnits, slug, factionKeywords, detachments, gstProfileTypes)
     const result = prepareArtifact(artifact)
     results.push(result)

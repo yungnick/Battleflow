@@ -1,4 +1,5 @@
 import { textOf, type Catalogue, type Profile, type RuleNode } from '../parsers/bsdata'
+import { evaluateVisibility, hasVisibilityRules, unionGates, type AbilityGate, type VisibilityContext } from './visibility'
 
 /**
  * Resolves BSData UUID cross-references (infoLink / entryLink / catalogueLink) so
@@ -163,7 +164,12 @@ export interface ResolvedUnit {
    * `core` is true when the linked rule is defined in the GST `sharedRules` (an edition
    * Core ability — see {@link collectGstRuleIds}); `normalize` uses it to classify.
    */
-  unitRules: Array<{ name: string; effect: string; core: boolean }>
+  unitRules: Array<{ name: string; effect: string; core: boolean; gate?: AbilityGate }>
+  /**
+   * Detachment gates for entries of `abilities`, keyed by profile id (see
+   * lib/ingest/visibility.ts). Absent key = always visible.
+   */
+  abilityGates?: Map<string, AbilityGate>
   keywords: string[]
   points?: string
 }
@@ -214,6 +220,7 @@ export function enumerateUnits(
   catalogues: Catalogue[],
   index: BsIndex,
   coreRuleIds: Set<string> = new Set(),
+  visibility?: VisibilityContext,
 ): ResolvedUnit[] {
   const roots: { node: BsNode; linkFactions: string[] }[] = []
   const seenRoot = new Set<string>()
@@ -234,7 +241,7 @@ export function enumerateUnits(
   }
 
   return roots.map(({ node, linkFactions }) => {
-    const unit = collectUnit(node, index, coreRuleIds)
+    const unit = collectUnit(node, index, coreRuleIds, visibility)
     // BattleScribe lets the root entryLink carry categories for the linked entry. Some shared
     // entries (e.g. Agents of the Imperium's Legends Kill Teams) tag "Faction: X" only there;
     // without it they'd look faction-agnostic and pass every Imperium faction's filter.
@@ -246,8 +253,18 @@ export function enumerateUnits(
 /**
  * Walk a unit subtree, resolving links, gathering its stat/weapon/ability/rule nodes.
  * `coreRuleIds` (the GST `sharedRules` id set) tags each unit rule as Core or not.
+ *
+ * With a `visibility` context, BSData `hidden` modifiers are honoured (see visibility.ts):
+ * the walk carries the path of gating nodes (enclosing entries / links) down the tree, skips
+ * subtrees that can never be visible for this faction, drops abilities that can never be
+ * visible, and records a detachment gate on those visible only with (or without) a detachment.
  */
-function collectUnit(root: BsNode, index: BsIndex, coreRuleIds: Set<string> = new Set()): ResolvedUnit {
+function collectUnit(
+  root: BsNode,
+  index: BsIndex,
+  coreRuleIds: Set<string> = new Set(),
+  visibility?: VisibilityContext,
+): ResolvedUnit {
   const unit: ResolvedUnit = {
     bsId: root.id,
     name: root.name ?? '(unnamed)',
@@ -257,10 +274,12 @@ function collectUnit(root: BsNode, index: BsIndex, coreRuleIds: Set<string> = ne
     unitRules: [],
     keywords: [],
   }
+  const abilityGates = new Map<string, AbilityGate>()
+  unit.abilityGates = abilityGates
   const weaponIds = new Set<string>()
   const abilityIds = new Set<string>()
   const ruleIds = new Set<string>()
-  const unitRuleIds = new Set<string>()
+  const unitRuleIndex = new Map<string, number>()
   const visited = new Set<string>()
 
   // Keywords + points come from the root datasheet node only (canonical).
@@ -270,42 +289,71 @@ function collectUnit(root: BsNode, index: BsIndex, coreRuleIds: Set<string> = ne
   const pts = (root.costs?.cost ?? []).find((c: { name: string; value: string }) => c.name === 'pts')
   if (pts) unit.points = pts.value
 
-  const addProfile = (p: Profile) => {
+  /** Visibility of something reached via `path` + `nodes`; always visible without a context. */
+  const visibilityOf = (path: BsNode[], ...nodes: (BsNode | undefined)[]) =>
+    visibility
+      ? evaluateVisibility([...path, ...nodes.filter((n): n is BsNode => !!n)], visibility)
+      : ({ kind: 'always' } as const)
+  const gateOf = (v: ReturnType<typeof visibilityOf>) => (v.kind === 'gated' ? v.gate : undefined)
+
+  const addProfile = (p: Profile, path: BsNode[], link?: BsNode) => {
     if (STAT_TYPES.has(p.typeName)) {
       if (!unit.statProfile) unit.statProfile = p
     } else if (WEAPON_TYPES.has(p.typeName)) {
       if (!weaponIds.has(p.id)) { weaponIds.add(p.id); unit.weapons.push(p) }
     } else if (isAbilityProfile(p) && !isWeaponScopedAbility(p)) {
-      if (!abilityIds.has(p.id)) { abilityIds.add(p.id); unit.abilities.push(p) }
+      const v = visibilityOf(path, link, p as BsNode)
+      if (v.kind === 'never') return
+      const gate = gateOf(v)
+      if (!abilityIds.has(p.id)) {
+        abilityIds.add(p.id)
+        unit.abilities.push(p)
+        if (gate) abilityGates.set(p.id, gate)
+      } else {
+        // Reached again via another path: visible whenever either path makes it visible.
+        const merged = unionGates(abilityGates.get(p.id), gate)
+        if (merged) abilityGates.set(p.id, merged)
+        else abilityGates.delete(p.id)
+      }
     }
   }
   const addRule = (r: RuleNode) => {
     if (r?.id && !ruleIds.has(r.id)) { ruleIds.add(r.id); unit.rules.push(r) }
   }
 
-  const traverse = (node: BsNode | undefined, depth: number) => {
+  const traverse = (node: BsNode | undefined, depth: number, path: BsNode[]) => {
     if (!node || depth > 12) return
 
-    for (const p of node.profiles?.profile ?? []) addProfile(p)
+    for (const p of node.profiles?.profile ?? []) addProfile(p, path)
 
     for (const l of node.infoLinks?.infoLink ?? []) {
       const target = index.get(l.targetId)
       if (!target) continue
       if (l.type === 'rule') {
+        const v = visibilityOf(path, l, target)
+        if (v.kind === 'never') continue
         addRule(target as RuleNode)
-        if (!hasWeaponProfiles(node) && !unitRuleIds.has(target.id)) {
+        if (!hasWeaponProfiles(node)) {
+          const gate = gateOf(v)
+          const existing = unitRuleIndex.get(target.id)
+          if (existing !== undefined) {
+            const prev = unit.unitRules[existing]
+            const merged = unionGates(prev.gate, gate)
+            unit.unitRules[existing] = { name: prev.name, effect: prev.effect, core: prev.core, ...(merged ? { gate: merged } : {}) }
+            continue
+          }
           const effect = textOf((target as RuleNode).description)
           if (isWeaponKeywordText(effect)) continue
-          unitRuleIds.add(target.id)
           const name = applyNameModifiers(l.name ?? (target as RuleNode).name, l.modifiers?.modifier ?? [])
-          unit.unitRules.push({ name, effect, core: coreRuleIds.has(target.id) })
+          unitRuleIndex.set(target.id, unit.unitRules.length)
+          unit.unitRules.push({ name, effect, core: coreRuleIds.has(target.id), ...(gate ? { gate } : {}) })
         }
       }
-      else if (l.type === 'profile') addProfile(target as Profile)
+      else if (l.type === 'profile') addProfile(target as Profile, path, l)
       else if (l.type === 'infoGroup') {
         if (visited.has(l.targetId)) continue
         visited.add(l.targetId)
-        traverse(target, depth + 1)
+        descend(target, depth, path, l)
       }
     }
 
@@ -314,19 +362,31 @@ function collectUnit(root: BsNode, index: BsIndex, coreRuleIds: Set<string> = ne
       const target = index.get(l.targetId)
       if (!target || visited.has(l.targetId)) continue
       visited.add(l.targetId)
-      traverse(target, depth + 1)
+      descend(target, depth, path, l)
     }
 
     for (const e of node.selectionEntries?.selectionEntry ?? []) {
       if (isPrunedOption(e.name)) continue
-      traverse(e, depth + 1)
+      descend(e, depth, path)
     }
     for (const g of node.selectionEntryGroups?.selectionEntryGroup ?? []) {
       if (isPrunedOption(g.name)) continue
-      traverse(g, depth + 1)
+      descend(g, depth, path)
     }
   }
 
-  traverse(root, 0)
+  /** Recurse into a child, extending the gating path and skipping never-visible subtrees. */
+  const descend = (child: BsNode, depth: number, path: BsNode[], link?: BsNode) => {
+    const gating = [link, child].filter((n): n is BsNode => !!n && hasVisibilityRules(n))
+    if (visibility && gating.length > 0) {
+      const next = [...path, ...gating]
+      if (evaluateVisibility(next, visibility).kind === 'never') return
+      traverse(child, depth + 1, next)
+    } else {
+      traverse(child, depth + 1, path)
+    }
+  }
+
+  traverse(root, 0, [])
   return unit
 }
