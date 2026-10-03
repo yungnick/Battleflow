@@ -89,4 +89,55 @@ describe('enumerateUnits', () => {
     expect(byName[shared.name]).toEqual(['Infantry', 'Deathwatch', 'Faction: Agents of the Imperium'])
     expect(byName['Inquisitor']).toEqual(['Faction: Inquisition'])
   })
+
+  it('honours BSData hidden modifiers when given a visibility context', () => {
+    // Gloam Rot shape: a shared ability profile hidden unless Shadow Legion is in the roster,
+    // plus an option subtree hidden for this primary catalogue, plus an ungated ability.
+    const hideUnless = (childId: string, scope: string, type = 'lessThan') => ({
+      modifier: [{ type: 'set', field: 'hidden', value: 'true', conditions: { condition: [{ type, scope, childId, value: '1' }] } }],
+    })
+    const ability = (id: string, name: string, extra: object = {}) => ({
+      id, name, typeId: 'ab', typeName: 'Abilities',
+      characteristics: { characteristic: [{ name: 'Description', '#text': `${name} text.` }] },
+      ...extra,
+    })
+    const unit = {
+      id: 'plaguebearers',
+      name: 'Plaguebearers',
+      type: 'unit',
+      profiles: { profile: [statProfile('pb-stat', 'Plaguebearer'), ability('native', 'Infected Outbreak')] },
+      infoLinks: { infoLink: [{ id: 'il-gloam', name: 'Gloam Rot', type: 'profile', targetId: 'gloam' }] },
+      selectionEntries: {
+        selectionEntry: [{
+          id: 'bt-only-option',
+          name: 'Other faction option',
+          type: 'upgrade',
+          modifiers: hideUnless('cat-other', 'primary-catalogue', 'notInstanceOf'),
+          profiles: { profile: [ability('never', 'Never Shown')] },
+        }],
+      },
+    } as unknown as SelectionEntry
+    const cat = {
+      id: 'cat-daemons',
+      name: 'Daemons',
+      gameSystemId: 'gst',
+      revision: '1',
+      sharedProfiles: { profile: [ability('gloam', 'Gloam Rot', { modifiers: hideUnless('det-shadow', 'roster') })] },
+      selectionEntries: { selectionEntry: [unit] },
+    } as unknown as Catalogue
+    const ctx = {
+      primaryCatalogueId: 'cat-daemons',
+      factionDetachmentIds: ['det-shadow', 'det-plague'],
+      allDetachmentIds: new Set(['det-shadow', 'det-plague']),
+      forceEntryIds: new Set<string>(),
+    }
+
+    const [ungated] = enumerateUnits([cat], buildIndex([cat]))
+    expect(ungated.abilities.map((a) => a.name)).toEqual(['Infected Outbreak', 'Gloam Rot', 'Never Shown'])
+
+    const [u] = enumerateUnits([cat], buildIndex([cat]), new Set(), ctx)
+    expect(u.abilities.map((a) => a.name)).toEqual(['Infected Outbreak', 'Gloam Rot'])
+    expect(u.abilityGates?.get('gloam')).toEqual({ detachments: ['det-shadow'] })
+    expect(u.abilityGates?.has('native')).toBe(false)
+  })
 })

@@ -20,6 +20,7 @@ import { ARMY_RULES, flagArmyRules } from './armyRules'
 import { attachArmyRuleOptions } from './armyRuleOptions'
 import { norm } from '../roster/normalize'
 import type { ResolvedUnit } from './resolve'
+import type { AbilityGate } from './visibility'
 import {
   DATA_SCHEMA_VERSION,
   FactionArtifactSchema,
@@ -109,9 +110,9 @@ function isDamagedProfile(name: string): boolean {
  * `PreparedUnit.damaged`.
  *
  * De-dup mirrors the previous single-pass behaviour: the concatenated list (core → faction
- * → datasheet) is keyed by `name|effect`, so an ability reachable via two paths — e.g.
- * "Leader" as both a Core rule and a profile — collapses to one entry, keeping the
- * earliest (best-classified) copy.
+ * → datasheet) is keyed by `name|effect` (plus any detachment gate), so an ability reachable
+ * via two paths — e.g. "Leader" as both a Core rule and a profile — collapses to one entry,
+ * keeping the earliest (best-classified) copy.
  */
 function buildUnitAbilities(
   u: ResolvedUnit,
@@ -147,8 +148,8 @@ function buildUnitAbilities(
   let damaged: Rule | undefined
 
   // Core / faction / datasheet abilities sourced from rule info-links.
-  for (const { name, effect, core: isCore } of u.unitRules) {
-    const base = { name, timing: '', effect, source: factionName }
+  for (const { name, effect, core: isCore, gate } of u.unitRules) {
+    const base = { name, timing: '', effect, source: factionName, ...gateFields(gate) }
     if (isFactionName(name)) faction.push({ ...base, category: 'faction' })
     else if (isCore) core.push({ ...base, category: 'core' })
     else datasheet.push({ ...base, category: 'datasheet' })
@@ -160,7 +161,7 @@ function buildUnitAbilities(
       if (!damaged) damaged = abilityFromProfile(p, factionName)
       continue
     }
-    const base = abilityFromProfile(p, factionName)
+    const base = { ...abilityFromProfile(p, factionName), ...gateFields(u.abilityGates?.get(p.id)) }
     if (isFactionName(p.name)) {
       faction.push({ ...base, category: 'faction' })
     } else if (isGroupType(p.typeName)) {
@@ -175,8 +176,18 @@ function buildUnitAbilities(
     }
   }
 
-  const abilities = dedupeBy([...core, ...faction, ...datasheet], (a) => `${a.name}|${a.effect}`)
+  // The gate is part of the key, so a detachment-gated copy can't swallow an ungated one.
+  const abilities = dedupeBy(
+    [...core, ...faction, ...datasheet],
+    (a) => `${a.name}|${a.effect}|${a.detachments?.join(',') ?? ''}|${a.exceptDetachments?.join(',') ?? ''}`,
+  )
   return { abilities, ...(damaged ? { damaged } : {}) }
+}
+
+/** Spread a resolved ability's detachment gate onto its `UnitAbility` (nothing when ungated). */
+function gateFields(gate: AbilityGate | undefined): Pick<UnitAbility, 'detachments' | 'exceptDetachments'> {
+  if (!gate) return {}
+  return 'detachments' in gate ? { detachments: gate.detachments } : { exceptDetachments: gate.exceptDetachments }
 }
 
 /**

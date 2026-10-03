@@ -533,23 +533,42 @@ export function extractDetachments(
   const detachments: Detachment[] = []
   const seenDetachmentIds = new Set<string>()
 
-  for (const cat of ownedCatalogues) {
-    for (const entry of detachmentEntriesOf(cat, index)) {
-      if (seenDetachmentIds.has(entry.id)) continue
-      seenDetachmentIds.add(entry.id)
-
-      // Gate-filter: drop chapter/sub-faction detachments not belonging to this primary.
-      const gate = gatingChildIds(entry)
-      if (gate.length > 0 && !gate.includes(primaryCatalogueId)) continue
-      // ...and detachments BSData explicitly hides from this primary (Asuryani ones for Drukhari).
-      if (excludedCatalogueIds(entry).includes(primaryCatalogueId)) continue
-
-      const det = entryToDetachment(entry, index)
-      if (det) detachments.push(det)
-    }
+  for (const entry of legalDetachmentEntries(ownedCatalogues, index, primaryCatalogueId)) {
+    if (seenDetachmentIds.has(entry.id)) continue
+    seenDetachmentIds.add(entry.id)
+    const det = entryToDetachment(entry, index)
+    if (det) detachments.push(det)
   }
 
   matchEnhancementGroups(extractEnhancements(ownedCatalogues), detachments)
 
   return detachments
+}
+
+/**
+ * The detachment entries of a faction's owned catalogues that are legal for its primary
+ * catalogue: ungated, or gated to the primary itself (see {@link gatingChildIds}), and not
+ * explicitly hidden from it (see {@link excludedCatalogueIds}, e.g. Asuryani ones for Drukhari).
+ * Includes entries with no extractable content, which `extractDetachments` then drops.
+ */
+export function legalDetachmentEntries(
+  ownedCatalogues: Catalogue[],
+  index: BsIndex,
+  primaryCatalogueId: string,
+): SelectionEntry[] {
+  return ownedCatalogues.flatMap(cat => detachmentEntriesOf(cat, index)).filter(entry => {
+    const gate = gatingChildIds(entry)
+    if (gate.length > 0 && !gate.includes(primaryCatalogueId)) return false
+    return !excludedCatalogueIds(entry).includes(primaryCatalogueId)
+  })
+}
+
+/**
+ * Every detachment entry id in the given catalogues, whichever faction owns it. Used by the
+ * ability visibility evaluator (lib/ingest/visibility.ts) to recognise a `hidden` condition on
+ * another faction's detachment (e.g. Shadow Legion on the Crucible daemons Death Guard imports)
+ * as one that can never hold.
+ */
+export function allDetachmentEntryIds(catalogues: Catalogue[], index: BsIndex): Set<string> {
+  return new Set(catalogues.flatMap(cat => detachmentEntriesOf(cat, index)).map(e => e.id))
 }
