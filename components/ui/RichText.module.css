@@ -1,0 +1,74 @@
+/* Typography is inherited from the call site (.effect etc.); this only adds structure + emphasis. */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.paragraph {
+  margin: 0;
+}
+
+/* Unit / faction keyword: tracked small-caps in the signal hue — recognisable but not shouting. */
+.keyword {
+  font-variant-caps: all-small-caps;
+  font-size: 1.12em; /* small-caps shrink glyphs; compensate to keep x-height near body */
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  color: var(--signal);
+}
+
+/* Rules term (mortal wounds, Battle-shock, …): brighter than body copy. */
+.term {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* Line-leading ability heading ("Daemonic Illusions (Aura):"). */
+.label {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.em {
+  font-style: italic;
+}
+
+/* "Or:" alternative marker */
+.or {
+  font-family: var(--f-mono);
+  font-size: 0.85em;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-mute);
+}
+
+.example {
+  margin: 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--border-strong);
+  color: var(--fg-mute);
+}
+
+.example .label {
+  color: var(--fg-soft);
+}
+
+.list,
+.ordered {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.list { list-style: disc; }
+.ordered { list-style: decimal; }
+
+.list .list { margin-top: 3px; list-style: circle; }
+
+.item::marker {
+  color: var(--fg-dim);
+}

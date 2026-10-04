@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Strat } from '@/lib/types'
 import { CPCost } from '@/components/ui/CPCost'
 import { ConditionPill } from '@/components/ui/ConditionPill'
+import { RichText } from '@/components/ui/RichText'
 import styles from './PhaseStratagemSection.module.css'
 
 interface Props {
@@ -73,7 +74,7 @@ export function PhaseStratagemSection({ stratagems }: Props) {
                       {strat.timing && (
                         <p className={styles.timing}>{strat.timing}</p>
                       )}
-                      <p className={styles.effect}>{strat.effect}</p>
+                      <RichText className={styles.effect} text={strat.effect} />
                       <div className={styles.pills}>
                         {strat.cond && <ConditionPill kind="cond">{strat.cond}</ConditionPill>}
                         {strat.once === 'battle' && <ConditionPill kind="once">Once / battle</ConditionPill>}

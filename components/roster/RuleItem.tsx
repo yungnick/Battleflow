@@ -1,4 +1,5 @@
 import { Rule, DrawerPayload, Unit } from '@/lib/types'
+import { stripRichText } from '@/lib/richText'
 import { ConditionPill } from '@/components/ui/ConditionPill'
 import styles from './RuleItem.module.css'
 
@@ -19,7 +20,7 @@ export function RuleItem({ rule, unit, onOpen }: Props) {
         <span className={styles.name}>{rule.name}</span>
         <span className={styles.source}>{rule.source}</span>
       </div>
-      <p className={styles.effect}>{rule.effect}</p>
+      <p className={styles.effect}>{stripRichText(rule.effect)}</p>
       {rule.cond && (
         <div className={styles.pills}>
           <ConditionPill kind="cond">{rule.cond}</ConditionPill>

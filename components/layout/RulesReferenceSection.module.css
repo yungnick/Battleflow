@@ -132,7 +132,6 @@
   line-height: 1.5;
   margin: 0;
   padding-left: 2px;
-  white-space: pre-wrap;
 }
 
 /* Nested reference table (Cabal Rituals / Blessings of Khorne) under an army-rule
@@ -186,7 +185,6 @@
   color: var(--fg-soft);
   line-height: 1.5;
   margin: 0;
-  white-space: pre-wrap;
 }
 
 .note {

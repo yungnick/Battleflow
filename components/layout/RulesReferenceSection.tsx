@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { GlossaryRule } from '@/lib/types'
+import { RichText } from '@/components/ui/RichText'
 import styles from './RulesReferenceSection.module.css'
 
 interface Props {
@@ -69,7 +70,7 @@ export function RulesReferenceSection({ armyRules, detachmentRules, detachmentMa
                   <span className={styles.name}>{rule.name}</span>
                   <span className={styles.expand}>{isOpen ? '−' : '+'}</span>
                 </div>
-                {isOpen && <p className={styles.effect}>{rule.effect}</p>}
+                {isOpen && <RichText className={styles.effect} text={rule.effect} />}
                 {/* Reference table the army rule points players at (Cabal Rituals /
                     Blessings of Khorne) — opens and closes with the parent card. */}
                 {isOpen && rule.options && rule.options.length > 0 && (
@@ -82,7 +83,7 @@ export function RulesReferenceSection({ armyRules, detachmentRules, detachmentMa
                             {option.requirementLabel}: {option.requirement}
                           </span>
                         </div>
-                        <p className={styles.optionEffect}>{option.effect}</p>
+                        <RichText className={styles.optionEffect} text={option.effect} />
                       </li>
                     ))}
                   </ul>

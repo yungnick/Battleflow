@@ -5,6 +5,7 @@ import { DrawerPayload, Weapon, Rule, Strat } from '@/lib/types'
 import { StatRow } from '@/components/ui/StatRow'
 import { ModifierBadge } from '@/components/ui/ModifierBadge'
 import { ConditionPill } from '@/components/ui/ConditionPill'
+import { RichText } from '@/components/ui/RichText'
 import { CPCost } from '@/components/ui/CPCost'
 import styles from './DetailDrawer.module.css'
 
@@ -73,7 +74,7 @@ export function DetailDrawer({ open, payload, onClose }: Props) {
   const ruleContent = r ? (
     <>
       <DrawerField label="Effect">
-        <p className={styles.effectText}>{r.effect}</p>
+        <RichText className={styles.effectText} text={r.effect} />
       </DrawerField>
       {r.timing && (
         <DrawerField label="Timing">
