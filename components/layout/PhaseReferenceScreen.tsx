@@ -130,8 +130,10 @@ export function PhaseReferenceScreen({
     })
   }
 
-  function handleExpandAll() {
-    setOpenGroupKeys(new Set(groups.map(g => g.key)))
+  const allOpen = groups.length > 0 && groups.every(g => openGroupKeys.has(g.key))
+
+  function handleToggleAll() {
+    setOpenGroupKeys(allOpen ? new Set() : new Set(groups.map(g => g.key)))
   }
 
   return (
@@ -148,7 +150,8 @@ export function PhaseReferenceScreen({
       <PhaseNav phases={PHASES} activeId={phase} onChange={handlePhaseChange} />
 
       <div className={`bf-scroll ${styles.scroll}`}>
-        <PhaseSummary units={units} stratagemCount={phaseStratagems.length} onExpandAll={handleExpandAll} />
+        <PhaseSummary units={units} stratagemCount={phaseStratagems.length} allOpen={allOpen}
+          onToggleAll={handleToggleAll} />
 
         <PhaseStratagemSection stratagems={phaseStratagems} />
 
