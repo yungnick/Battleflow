@@ -221,12 +221,14 @@ function parsePlainTextUnits(lines: string[]): ParsedUnit[] {
 
   type Acc = { name: string; points: number | undefined; bulletLines: string[] }
   let current: Acc | null = null
+  let lastBulletIndent: string | null = null
 
   const commit = () => {
     if (!current) return
     const unit = parsePlainBlock(current.name, current.points, current.bulletLines)
     if (unit) units.push(unit)
     current = null
+    lastBulletIndent = null
   }
 
   for (const line of lines) {
@@ -245,7 +247,20 @@ function parsePlainTextUnits(lines: string[]): ParsedUnit[] {
       }
     }
 
-    if (current && /[•◦]/.test(t)) current.bulletLines.push(line)
+    if (!current) continue
+
+    if (/[•◦]/.test(t)) {
+      current.bulletLines.push(line)
+      lastBulletIndent = line.match(/^(\s*)/)?.[1] ?? ''
+      continue
+    }
+
+    // Indented line with no bullet char: the app exports only the first weapon of a
+    // group on a "•" line and the rest as bare indented continuations. Treat it as a
+    // sibling bullet at the previous bullet's indent.
+    if (lastBulletIndent !== null && /^\s/.test(line)) {
+      current.bulletLines.push(`${lastBulletIndent}• ${t}`)
+    }
   }
 
   commit()

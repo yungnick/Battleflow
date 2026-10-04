@@ -253,3 +253,51 @@ Bloodthirster (300 pts)
     expect(result.totalPoints).toBe(500)
   })
 })
+
+describe('parseGwText – un-bulleted continuation weapon lines', () => {
+  const list = `
+2k Nick (2000 points)
+
+Tyranids
+Ambush Predators (3 Detachment Points)
+Strike Force (2000 points)
+
+OTHER DATASHEETS
+
+Biovores (60 points)
+  • 1x Chitin-barbed limbs
+    1x Spore Mine launcher
+
+Hyperadapted Raveners (165 points)
+  • 1x Ravener Prime
+    • 1x Prime claws and talons
+  • 4x Raveners
+    • 4x Ravener heavy claws and talons
+      1x Venom bolt
+
+Zoanthropes (190 points)
+  • 1x Neurothrope
+    • 1x Chitinous claws and teeth
+      1x Warp Blast
+  • 5x Zoanthrope
+    • 5x Chitinous claws and teeth
+      5x Warp Blast
+
+Exported with App Version: v2.7.1 (146), Data Version: v963
+`.trim()
+
+  it('keeps the bare continuation weapon after a bulleted one', () => {
+    const units = parseGwText(list).units
+    expect(units.find(u => u.name === 'Biovores')!.wargear).toEqual([
+      'Chitin-barbed limbs',
+      'Spore Mine launcher',
+    ])
+  })
+
+  it('keeps nested continuation weapons and does not pick up the footer', () => {
+    const units = parseGwText(list).units
+    expect(units.find(u => u.name === 'Hyperadapted Raveners')!.wargear).toContain('Venom bolt')
+    expect(units.find(u => u.name === 'Zoanthropes')!.wargear).toContain('Warp Blast')
+    expect(units.some(u => u.name.startsWith('Exported'))).toBe(false)
+  })
+})
