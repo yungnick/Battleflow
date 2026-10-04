@@ -33,8 +33,8 @@
         "Heretic Astartes"
       ],
       "artifact": "/data/factions/chaos-space-marines.json",
-      "bytes": 574783,
-      "sha256": "f8188f9c53b94727b600d0ae8d1cb17a93d900f6f2a53c7d53611506601f7260",
+      "bytes": 574797,
+      "sha256": "01c42617672a94d884ede0556267033edf4ce0fbbadad60c9aad3af7e0788e2a",
       "unitCount": 115
     },
     {
@@ -59,8 +59,8 @@
         "Legiones Daemonica"
       ],
       "artifact": "/data/factions/emperor-s-children.json",
-      "bytes": 201564,
-      "sha256": "164cc987dae08078f33c86d395786fc18f9206331d9c9c49af1d6d49bf6f66ee",
+      "bytes": 201583,
+      "sha256": "a96cdaedabcfd9c20804437f174142999f684fd99e35a6cb92e08b6e1cd18325",
       "unitCount": 30
     },
     {
@@ -72,8 +72,8 @@
         "Legiones Daemonica"
       ],
       "artifact": "/data/factions/thousand-sons.json",
-      "bytes": 334732,
-      "sha256": "e2b261dd1175d5fd34392bd350fc5fb3067a90b858399bd595fa9b85964cd83e",
+      "bytes": 334734,
+      "sha256": "f7eb9e5b6d2f753082b784881c459c13912e0e8920aea027b8e17c122c3fd68e",
       "unitCount": 68
     },
     {
@@ -131,8 +131,8 @@
         "Blood Angels"
       ],
       "artifact": "/data/factions/blood-angels.json",
-      "bytes": 820430,
-      "sha256": "54ec59afa022af1020460194c6ab777253d8c7a2ca1f819378a73e67d21e8c4e",
+      "bytes": 820378,
+      "sha256": "2bac146797f263fa391778a98bc0ce69c1ea1602dffbfafb5f211f2ac7ed0e7c",
       "unitCount": 186
     },
     {
@@ -143,8 +143,8 @@
         "Adeptus Astartes"
       ],
       "artifact": "/data/factions/dark-angels.json",
-      "bytes": 780043,
-      "sha256": "2e8555083ea27c23e871c0d8984ccc1899e3aea8b667a6ba57fd828dfaf19ef9",
+      "bytes": 780068,
+      "sha256": "2368bdf0eedc977931055ab9ae43fc793aa55435ef0afdaa2df028c5b421d29c",
       "unitCount": 178
     },
     {
@@ -263,8 +263,8 @@
         "Adeptus Custodes"
       ],
       "artifact": "/data/factions/adeptus-custodes.json",
-      "bytes": 186405,
-      "sha256": "9aafdba5e3c70e717fd21f7d8b02c06b6c7957915f95f9a8406e830de8a9726b",
+      "bytes": 186395,
+      "sha256": "969cfee06c09476689dd8fddbdb72a9fefc9755fec55e86b2ad4586585e87548",
       "unitCount": 34
     },
     {
@@ -307,8 +307,8 @@
         "Astra Militarum"
       ],
       "artifact": "/data/factions/astra-militarum.json",
-      "bytes": 573126,
-      "sha256": "62a86bc9d58ccb1fccaba856c400bebd33402d41f85774dbf8f338942f8cff35",
+      "bytes": 573116,
+      "sha256": "1e0b18524bcc8a1a5a4723ff1cb2e796aaa0c5f5a91c473457fb0fd06dfd3865",
       "unitCount": 138
     },
     {
@@ -329,8 +329,8 @@
         "Imperial Knights"
       ],
       "artifact": "/data/factions/imperial-knights.json",
-      "bytes": 168692,
-      "sha256": "d17bc8cbe8edb2b192ee8d062026658ff730958605413d7e269dae283900f548",
+      "bytes": 168699,
+      "sha256": "6cfafacc16032d011aa6846f0df94199f3f97cf07a18dcc731e67cbb07c0ac82",
       "unitCount": 22
     },
     {

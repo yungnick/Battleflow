@@ -212,4 +212,17 @@ describe('Committed data quality (all factions)', () => {
     for (const { factionId, artifact } of all) walk(artifact, factionId)
     expect(bad.slice(0, 10)).toEqual([])
   })
+
+  it('does not misstate roll bonuses in stratagem summaries', () => {
+    // Regression: "roll D6, adding 1 if X; on a 4+…" was summarised as "4+ (5+ if not X)", which
+    // inverts the bonus. Bonuses must read "+N if X"; "(5+ if not/non X)" is never correct.
+    const wrong = all.flatMap(({ factionId, detachments }) =>
+      detachments.flatMap((d) =>
+        (d.stratagems ?? [])
+          .filter((s) => /\(\d\+ if (not|non)\b/i.test(s.summary ?? ''))
+          .map((s) => `${factionId} / ${s.name}: ${s.summary}`),
+      ),
+    )
+    expect(wrong).toEqual([])
+  })
 })
