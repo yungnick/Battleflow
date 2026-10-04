@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { parseGwText } from '@/lib/roster/parseGwText'
 import type { ParsedArmy } from '@/lib/roster/parseGwText'
@@ -21,6 +21,7 @@ export function RosterImport() {
   const [text, setText] = useState('')
   const [state, setState] = useState<State>({ kind: 'idle' })
   const [selectedFactionId, setSelectedFactionId] = useState('')
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
 
   async function handleFactionPick(e: React.FormEvent) {
@@ -141,6 +142,12 @@ export function RosterImport() {
 
   const loading = state.kind === 'loading'
 
+  function handleClear() {
+    setText('')
+    setState({ kind: 'idle' })
+    textareaRef.current?.focus()
+  }
+
   if (state.kind === 'pick-faction') {
     return (
       <form className={styles.form} onSubmit={handleFactionPick} noValidate>
@@ -178,11 +185,25 @@ export function RosterImport() {
 
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate>
-      <label className={styles.label} htmlFor="gw-army-text">
-        Paste GW army list
-      </label>
+      <div className={styles.labelRow}>
+        <label className={styles.label} htmlFor="gw-army-text">
+          Paste GW army list
+        </label>
+        {text && (
+          <button
+            type="button"
+            className={styles.clear}
+            onClick={handleClear}
+            disabled={loading}
+            aria-label="Clear army list"
+          >
+            Clear
+          </button>
+        )}
+      </div>
       <textarea
         id="gw-army-text"
+        ref={textareaRef}
         className={styles.textarea}
         value={text}
         onChange={e => setText(e.target.value)}

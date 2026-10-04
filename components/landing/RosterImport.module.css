@@ -15,6 +15,35 @@
   margin-bottom: 2px;
 }
 
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 28px;
+}
+
+.clear {
+  font-family: var(--f-mono);
+  font-size: var(--t-xs);
+  letter-spacing: 0.06em;
+  color: var(--fg-dim);
+  background: transparent;
+  border: none;
+  padding: 6px 4px;
+  margin-right: -4px;
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+
+.clear:hover:not(:disabled) {
+  color: var(--fg-soft);
+}
+
+.clear:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .textarea {
   font-family: var(--f-mono);
   font-size: var(--t-xs);
