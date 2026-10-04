@@ -4,10 +4,11 @@ import styles from './PhaseSummary.module.css'
 interface Props {
   units: Unit[]
   stratagemCount?: number
-  onExpandAll: () => void
+  allOpen: boolean
+  onToggleAll: () => void
 }
 
-export function PhaseSummary({ units, stratagemCount, onExpandAll }: Props) {
+export function PhaseSummary({ units, stratagemCount, allOpen, onToggleAll }: Props) {
   const totalWeapons = units.reduce((n, u) => n + (u.weapons?.length ?? 0), 0)
   const totalRules = units.reduce((n, u) => n + (u.abilities?.length ?? 0), 0)
   const totalStrats = stratagemCount ?? units.reduce((n, u) => n + (u.stratagems?.length ?? 0), 0)
@@ -20,7 +21,9 @@ export function PhaseSummary({ units, stratagemCount, onExpandAll }: Props) {
         <Stat n={totalRules} label="rules" />
         <Stat n={totalStrats} label="strat" highlight={totalStrats > 0} />
       </div>
-      <button className={styles.expandBtn} onClick={onExpandAll}>Expand All</button>
+      <button className={styles.expandBtn} onClick={onToggleAll}>
+        {allOpen ? 'Close All' : 'Expand All'}
+      </button>
     </div>
   )
 }
