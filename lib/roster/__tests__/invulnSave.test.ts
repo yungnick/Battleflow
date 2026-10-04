@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { findPlainInvulnSave, stripPlainInvulnSave, withInvulnSv } from '../invulnSave'
+import { findPlainInvulnSave, stripPlainInvulnSave, withInvulnSv, nameplateSaves, fullSaves } from '../invulnSave'
 import type { Rule } from '../../types'
 
 const rule = (over: Partial<Rule>): Rule => ({
@@ -101,5 +101,17 @@ describe('withInvulnSv', () => {
     const stats = { SV: '3+' }
     withInvulnSv(stats, '4')
     expect(stats).toEqual({ SV: '3+' })
+  })
+})
+
+describe('nameplateSaves', () => {
+  const v = (Sv: string, InSv = '') => nameplateSaves({ Sv, InSv }).map(c => `${c.label} ${c.value}`)
+  it('shows only Sv without an invuln', () => expect(v('3+')).toEqual(['Sv 3+']))
+  it('shows both when invuln is worse than save', () => expect(v('2+', '5+')).toEqual(['Sv 2+', 'Sv 5++']))
+  it('shows only InSv when better', () => expect(v('7+', '4+')).toEqual(['Sv 4++']))
+  it('shows only InSv when equal', () => expect(v('4+', '4+')).toEqual(['Sv 4++']))
+  it('keeps footnote markers', () => expect(v('3+', '5+*')).toEqual(['Sv 3+', 'Sv 5++*']))
+  it('fullSaves always shows both', () => {
+    expect(fullSaves({ Sv: '7+', InSv: '4+' }).map(c => `${c.label} ${c.value}`)).toEqual(['Sv 7+', 'Sv 4++'])
   })
 })

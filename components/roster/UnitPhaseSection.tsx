@@ -3,6 +3,7 @@ import { Unit, DrawerPayload, Weapon, Stats, PhaseId, UnitAbility } from '@/lib/
 import { WeaponProfileRow } from './WeaponProfileRow'
 import { RuleItem } from './RuleItem'
 import { StatRow } from '@/components/ui/StatRow'
+import { fullSaves, nameplateSaves } from '@/lib/roster/invulnSave'
 import styles from './UnitPhaseSection.module.css'
 
 interface Props {
@@ -14,12 +15,18 @@ interface Props {
   onOpenDetail: (payload: DrawerPayload) => void
 }
 
-const BASE_MINI_KEYS = ['M', 'T', 'SV', 'W'] as const
+/** Nameplate stats per phase. `Sv` is always last and expands to the Sv / InSv cell(s). */
+const MINI_KEYS: Record<PhaseId, readonly string[]> = {
+  command: ['M', 'T', 'W', 'LD', 'Sv'],
+  movement: ['M'],
+  shooting: ['T', 'W', 'Sv'],
+  charge: ['T', 'W', 'Sv'],
+  fight: ['T', 'W', 'Sv'],
+  battleshock: ['LD'],
+}
 
 function miniProfileKeys(phase?: PhaseId): readonly string[] {
-  if (phase === 'battleshock') return ['LD']
-  if (phase === 'command') return [...BASE_MINI_KEYS, 'LD']
-  return BASE_MINI_KEYS
+  return phase ? MINI_KEYS[phase] : MINI_KEYS.fight
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -252,18 +259,32 @@ function CoreStrip({
   )
 }
 
+/** Expanded profile: both saves in one `Sv` cell ("4+ / 4++"; invuln only when the unit has one). */
+function splitSaves(stats: Stats): Stats {
+  const out: Stats = {}
+  for (const [k, v] of Object.entries(stats)) {
+    if (k === 'Sv') out.Sv = fullSaves(stats).map(c => c.value).join(' / ')
+    else if (k !== 'InSv') out[k] = v
+  }
+  return out
+}
+
 /** Stat summary on the right of the header. Keys depend on active phase. */
 function MiniProfile({ stats, phase }: { stats?: Stats; phase?: PhaseId }) {
   if (!stats) return null
   const keys = miniProfileKeys(phase)
-  const entries = keys.filter(k => k in stats)
-  if (entries.length === 0) return null
+  const cells = keys.flatMap(k => {
+    if (!(k in stats)) return []
+    if (k === 'Sv') return nameplateSaves(stats)
+    return [{ label: k, value: stats[k] }]
+  })
+  if (cells.length === 0) return null
   return (
     <span className={styles.miniProfile}>
-      {entries.map(k => (
-        <span key={k} className={styles.miniStat}>
-          <span className={styles.miniKey}>{k}</span>
-          <span className={styles.miniValue}>{stats[k]}</span>
+      {cells.map((c, i) => (
+        <span key={`${c.label}-${i}`} className={styles.miniStat}>
+          <span className={styles.miniKey}>{c.label}</span>
+          <span className={styles.miniValue}>{c.value}</span>
         </span>
       ))}
     </span>
@@ -502,7 +523,7 @@ export function UnitPhaseSection({ unit, count, open, phase, onToggle, onOpenDet
           {full.stats && Object.keys(full.stats).length > 0 && (
             <SubSection label="Profile">
               <div className={styles.profileRow}>
-                <StatRow stats={full.stats} />
+                <StatRow stats={splitSaves(full.stats)} />
               </div>
             </SubSection>
           )}

@@ -56,6 +56,43 @@ export function stripPlainInvulnSave<T extends Pick<Rule, 'name'>>(abilities: T[
   return abilities.filter(a => !isPlainInvulnSave(a))
 }
 
+export interface SaveCell {
+  label: 'Sv'
+  value: string
+}
+
+/** Leading save digit of a stat value ("4+", "5+*"), or null when empty / non-numeric. */
+function saveDigit(v: string | undefined): number | null {
+  const m = v ? /^\s*(\d)\+/.exec(v) : null
+  return m ? Number(m[1]) : null
+}
+
+/** "4+*" → "4++*": invuln notation, keeping any trailing footnote marker. */
+function invulnLabel(v: string): string {
+  return v.replace(/^\s*(\d)\+/, '$1++').trim()
+}
+
+/** Both saves, always (expanded profile). `InSv` is omitted when the unit has none. */
+export function fullSaves(stats: Stats | undefined): SaveCell[] {
+  const cells: SaveCell[] = []
+  if (stats?.Sv) cells.push({ label: 'Sv', value: stats.Sv })
+  if (stats?.InSv && stats.InSv.trim()) cells.push({ label: 'Sv', value: invulnLabel(stats.InSv) })
+  return cells
+}
+
+/**
+ * Nameplate saves: show only the invuln when it is as good as or better than
+ * the armour save (lower number), otherwise both. Unparseable values fall back
+ * to showing both.
+ */
+export function nameplateSaves(stats: Stats | undefined): SaveCell[] {
+  const cells = fullSaves(stats)
+  if (cells.length < 2) return cells
+  const sv = saveDigit(stats?.Sv)
+  const inv = saveDigit(stats?.InSv)
+  return sv !== null && inv !== null && inv <= sv ? [cells[1]] : cells
+}
+
 /**
  * Return a copy of `stats` with SV augmented to spell out the invuln save —
  * e.g. SV "7+" with invuln digit "4" → "7+, 4++". Pass-through when there is

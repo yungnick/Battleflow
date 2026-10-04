@@ -16,7 +16,7 @@ const WEAPON_PHASES: { phase: PhaseId; kind: 'melee' | 'ranged' }[] = [
  *
  *  - command / battleshock → LD (Leadership) and OC (Objective Control)
  *  - movement / charge     → M (Move) and OC
- *  - shooting / fight      → T (Toughness), SV (Save), W (Wounds)
+ *  - shooting / fight      → T (Toughness), Sv / InSv (Saves), W (Wounds)
  *
  * WS / BS aren't listed here — those ride on the weapon profile, not the
  * unit statline, so the weapon-kind filter already covers them.
@@ -24,9 +24,9 @@ const WEAPON_PHASES: { phase: PhaseId; kind: 'melee' | 'ranged' }[] = [
 const STATS_BY_PHASE: Record<PhaseId, readonly string[]> = {
   command:     ['LD', 'OC'],
   movement:    ['M', 'OC'],
-  shooting:    ['T', 'SV', 'W'],
+  shooting:    ['T', 'Sv', 'InSv', 'W'],
   charge:      ['M', 'OC'],
-  fight:       ['T', 'SV', 'W'],
+  fight:       ['T', 'Sv', 'InSv', 'W'],
   battleshock: ['LD', 'OC'],
 }
 
