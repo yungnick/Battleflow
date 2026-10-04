@@ -10,7 +10,7 @@
     "ingest": "tsx lib/ingest/cli.ts",
     "ingest:wahapedia": "tsx lib/ingest/wahapediaCli.ts",
     "ingest:dedup": "tsx lib/ingest/dedupCli.ts",
-    "ingest:summarise": "tsx lib/ingest/summariseCli.ts",
+    "ingest:summarise": "tsx --env-file-if-exists=.env.local lib/ingest/summariseCli.ts",
     "ingest:armyrules": "tsx lib/ingest/armyRulesCli.ts",
     "ingest:armyruleoptions": "tsx lib/ingest/armyRuleOptionsCli.ts",
     "test": "vitest run"

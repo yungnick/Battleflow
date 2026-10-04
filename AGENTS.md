@@ -112,8 +112,9 @@ into small, self-contained per-faction JSON artifacts committed under `public/da
    mechanical `summary` fields onto every stratagem. Run after dedup — it reads the final artifacts
    and patches them in place. Previously-generated summaries are cached in
    `docs/summary-overrides.json` (keyed by `sha256(effect)[0:12]`) so re-runs are instant for unchanged
-   effects. `ANTHROPIC_API_KEY` is only needed when new/changed effects have no cached summary — with
-   none uncached, the step runs offline, and without a key it aborts *before writing anything*. **Must be re-run after every Wahapedia ingest**, because step 2 clears any
+   effects. `ANTHROPIC_API_KEY` is only needed when new/changed effects have no cached summary: copy
+   `.env.example` to `.env.local` (gitignored; the script loads it) and set it there. Without a key the
+   step still applies every cached summary, lists the uncached effects, and exits non-zero. **Must be re-run after every Wahapedia ingest**, because step 2 clears any
    summary fields that were set by a previous summarise run.
 5. `npm run ingest:armyrules -- [--factions <slug,slug|all>] [--dry-run]` to tag each
    faction's army rule(s) in the glossary (`glossary[].armyRule`) from the curated allowlist

@@ -299,19 +299,24 @@ async function main() {
     `  ${total} unique effect(s) found — ${cached} already in cache, ${toGenerate} to generate`,
   )
 
-  // Only require the API key when there are actually uncached effects to generate.
+  // Only need the API key when there are uncached effects to generate. Without one we still
+  // apply every cached summary, then report what is missing (and exit non-zero) at the end.
   let client: Anthropic | null = null
   if (toGenerate > 0) {
     const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      console.error('Error: ANTHROPIC_API_KEY environment variable is not set')
-      process.exit(1)
+    if (apiKey) {
+      client = new Anthropic({ apiKey })
+    } else {
+      console.warn(
+        '  ⚠ ANTHROPIC_API_KEY is not set (put it in .env.local) — applying cached summaries only;\n' +
+          `    ${toGenerate} stratagem effect(s) will be left without a summary.`,
+      )
     }
-    client = new Anthropic({ apiKey })
   }
 
-  const rl = args.interactive ? createInterface({ input, output }) : null
+  const rl = client && args.interactive ? createInterface({ input, output }) : null
   const totalToGenerate = toGenerate
+  const skipped: string[] = []
 
   let generated = 0
   let humanReviewed = 0
@@ -324,9 +329,14 @@ async function main() {
       continue
     }
 
+    if (!client) {
+      skipped.push(entry.name)
+      continue
+    }
+
     process.stdout.write(`  [${generated + 1}/${totalToGenerate}] ${entry.name} … `)
 
-    const candidate = await generateSummary(client!, entry.name, entry.effect)
+    const candidate = await generateSummary(client, entry.name, entry.effect)
     process.stdout.write(`"${candidate}"`)
 
     let final = candidate
@@ -379,6 +389,12 @@ async function main() {
       `\nDry run: ${results.size} summaries prepared` +
         ` (${generated} generated, ${cached} from cache) — nothing written.`,
     )
+  }
+
+  if (skipped.length > 0) {
+    console.error(`\nNo summary for ${skipped.length} effect(s) (no API key): ${skipped.join(', ')}`)
+    console.error('Set ANTHROPIC_API_KEY in .env.local and re-run `npm run ingest:summarise`.')
+    process.exitCode = 1
   }
 }
 
