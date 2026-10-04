@@ -211,6 +211,32 @@ function dedupeBy<T>(items: T[], key: (item: T) => string): T[] {
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Collapse runs of whitespace to single spaces and trim ("Horrifying Beauty " → "Horrifying Beauty"). */
+export function cleanName(name: string): string {
+  return name.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * BSData text fields carry stray whitespace the printed card doesn't: trailing spaces and double
+ * spaces in names ("Magna-rail cannon ", "Plasma caliver -  supercharge") and trailing newlines
+ * in stat values ("4+\n"). Normalise every `name` and every characteristic in a `stats` record
+ * in place. Prose (`effect`, descriptions) is deliberately left alone — its newlines are
+ * meaningful. Must run before emit/dedup so the content hashes cover the cleaned text.
+ */
+export function cleanArtifactWhitespace(root: unknown): void {
+  const walk = (node: unknown, key?: string) => {
+    if (Array.isArray(node)) return node.forEach((n) => walk(n))
+    if (!node || typeof node !== 'object') return
+    const obj = node as Record<string, unknown>
+    for (const [k, v] of Object.entries(obj)) {
+      if (k === 'name' && typeof v === 'string') obj[k] = cleanName(v)
+      else if (key === 'stats' && typeof v === 'string') obj[k] = v.trim()
+      else walk(v, k)
+    }
+  }
+  walk(root)
+}
+
 /**
  * Convert a resolved BSData catalogue + units into a validated `FactionArtifact`.
  * This is the final step of the BSData ingest pipeline; the artifact is then
@@ -288,6 +314,8 @@ export function toFactionArtifact(
   // points players at — extracted from a standalone selectionEntry that enumerateUnits
   // never walks (see lib/ingest/armyRuleOptions.ts).
   attachArmyRuleOptions(artifact, faction)
+
+  cleanArtifactWhitespace(artifact)
 
   // Parse validates the artifact shape and strips any unknown fields.
   return FactionArtifactSchema.parse(artifact) as FactionArtifact

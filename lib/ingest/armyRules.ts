@@ -55,7 +55,8 @@ export const ARMY_RULES: Record<string, string[]> = {
   'iron-hands': ['Oath of Moment'],
   'leagues-of-votann': ['Prioritised Efficiency'],
   'necrons': ['Reanimation Protocols'],
-  'orks': ['Waaagh!'],
+  // Wahapedia's Orks "Army Rules" section lists all three.
+  'orks': ['Waaagh!', 'Da Boss', 'Unstable Energies'],
   'raven-guard': ['Oath of Moment'],
   'salamanders': ['Oath of Moment'],
   'space-marines': ['Oath of Moment'],

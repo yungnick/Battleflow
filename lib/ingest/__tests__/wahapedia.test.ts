@@ -179,4 +179,30 @@ describe('parseStratagems', () => {
     const effect = parseStratagems(html, 'Orks')[0].stratagems[0].effect
     expect(effect).toBe('Roll one D3: Suffer mortal wounds. Or: No longer battle-shocked. +1CP Or: Re-roll.')
   })
+
+  it('reads cards whose WHEN/TARGET/EFFECT labels are plain text rather than <b>-wrapped', () => {
+    const html = stratCard(
+      'EXPENDABLE BIOMASS',
+      'Tyranid Attack – Strategic Ploy Stratagem',
+      '1CP',
+      'WHEN: Your <a href="#">Shooting phase</a>.<br><br>TARGET: One <span class="kwb">TYRANID</span> unit from your army.<br><br>EFFECT: Until the end of the phase, your unit can shoot: nothing here is a TYRANID: label.',
+    )
+    const strat = parseStratagems(html, 'Tyranids')[0].stratagems[0]
+    expect(strat.timing).toBe('Your Shooting phase.')
+    expect(strat.cond).toBe('One TYRANID unit from your army.')
+    expect(strat.effect).toBe('Until the end of the phase, your unit can shoot: nothing here is a TYRANID: label.')
+  })
+
+  it('reads labels whose colon falls outside the bold tag (<b>WHEN</b>:)', () => {
+    const html = stratCard(
+      'STORM OF DARKNESS',
+      'Traitoris Lance – Strategic Ploy Stratagem',
+      '1CP',
+      '<b>WHEN</b>: Your opponent’s Shooting phase.<br><br><b>TARGET:</b> One unit.<br><br><b>EFFECT</b>:<br><ul><li>Your unit has Stealth.</li><li>Melee attacks have -1 to hit.</li></ul>',
+    )
+    const strat = parseStratagems(html, 'Chaos Knights')[0].stratagems[0]
+    expect(strat.timing).toBe('Your opponent’s Shooting phase.')
+    expect(strat.cond).toBe('One unit.')
+    expect(strat.effect).toBe('Your unit has Stealth. Melee attacks have -1 to hit.')
+  })
 })

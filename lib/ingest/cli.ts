@@ -163,7 +163,8 @@ async function main() {
     // Scope detachments to the faction's own catalogue(s), dropping the ally catalogues its
     // chain imports for roster-building, then gate-filter chapter/sub-faction detachments.
     const ownedCats = selectOwnedCatalogues(allCats, faction, index)
-    const detachments = extractDetachments(ownedCats, index, faction.id)
+    const importedCats = allCats.filter((c) => !ownedCats.includes(c))
+    const detachments = extractDetachments(ownedCats, index, faction.id, importedCats)
     // Honour BSData `hidden` modifiers on unit abilities (see visibility.ts): primary-catalogue
     // and force gates resolve here; detachment gates are carried onto the artifact.
     const visibility: VisibilityContext = {

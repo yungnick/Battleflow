@@ -306,6 +306,11 @@ function isSubsetOf(sub: Set<string>, sup: Set<string>): boolean {
   return true
 }
 
+/** Top-level shared groups that hold enhancements: `Enhancements`, `<X> Enhancements`, `Enhancements - Upgrades`. */
+function isEnhancementGroup(name: string): boolean {
+  return isPrunedOption(name) || name.startsWith('Enhancements - ')
+}
+
 export interface EnhancementGroup {
   comment: string
   enhancements: Enhancement[]
@@ -347,6 +352,10 @@ function conditionChildIds(entry: SelectionEntry): Set<string> {
  *  - Space Marines-style: one group per detachment, named "\<Detachment\> Enhancements"
  *    (e.g. "Gladius Task Force Enhancements"), whose entries carry no `comment` at all — the
  *    group name already names the detachment, so it's used as the fallback owner.
+ *  - Nested (Orks, Grey Knights, T'au, the Astra Militarum / Tyranids / Aeldari libraries, most
+ *    of the Space Marine codex): a top-level "Enhancements" (character) and "Enhancements -
+ *    Upgrades" (unit upgrade, tagged `kind: 'upgrade'`) group whose *child groups* are the
+ *    per-detachment "<Detachment> Enhancements" groups. Groups are walked recursively.
  *
  * `comment: null` on a bare "Enhancements" pool entry (no group-name fallback available)
  * means genuinely unlisted/Legends content — logged and skipped, not silently dropped.
@@ -354,32 +363,50 @@ function conditionChildIds(entry: SelectionEntry): Set<string> {
 export function extractEnhancements(ownedCatalogues: Catalogue[]): EnhancementGroup[] {
   const byOwner = new Map<string, Enhancement[]>()
   const refsByOwner = new Map<string, Set<string>>()
+
+  // Entries with neither a `comment` nor an owning group (Agents of the Imperium's bare pool)
+  // are emitted as one group each with an empty `comment`; {@link matchEnhancementGroups} resolves
+  // them through the detachment their visibility modifier is gated on, or skips them.
+  const ownerless: EnhancementGroup[] = []
+
+  const collect = (group: SelectionEntryGroup, inheritedOwner: string | undefined, inheritedUpgrade: boolean) => {
+    // A "<Detachment> Enhancements" group names its detachment; a bare "Enhancements" /
+    // "Enhancements - Upgrades" pool defers to the enclosing group, or to per-entry `comment`.
+    const isPool = group.name === 'Enhancements' || group.name.startsWith('Enhancements - ')
+    const owner = isPool ? inheritedOwner : group.name.replace(/ Enhancements$/, '')
+    const upgrade = inheritedUpgrade || group.name.startsWith('Enhancements - Upgrades')
+    for (const entry of group.selectionEntries?.selectionEntry ?? []) {
+      const entryOwner = entry.comment ?? owner
+      const enhancement = enhancementFromEntry(entry, entryOwner ?? '')
+      if (upgrade) enhancement.kind = 'upgrade'
+      if (!entryOwner) {
+        ownerless.push({ comment: '', enhancements: [enhancement], referencedIds: conditionChildIds(entry) })
+        continue
+      }
+      const list = byOwner.get(entryOwner) ?? []
+      list.push(enhancement)
+      byOwner.set(entryOwner, list)
+      const refs = refsByOwner.get(entryOwner) ?? new Set<string>()
+      for (const id of conditionChildIds(entry)) refs.add(id)
+      refsByOwner.set(entryOwner, refs)
+    }
+    for (const child of group.selectionEntryGroups?.selectionEntryGroup ?? []) collect(child, owner, upgrade)
+  }
+
   for (const cat of ownedCatalogues) {
     for (const group of cat.sharedSelectionEntryGroups?.selectionEntryGroup ?? []) {
-      if (!isPrunedOption(group.name)) continue
-      // A "<Detachment> Enhancements" group already names its detachment; only the bare
-      // "Enhancements" pool needs the per-entry `comment` to disambiguate.
-      const groupOwner = group.name === 'Enhancements' ? undefined : group.name.replace(/ Enhancements$/, '')
-      for (const entry of group.selectionEntries?.selectionEntry ?? []) {
-        const owner = entry.comment ?? groupOwner
-        if (!owner) {
-          console.warn(`  ⚠ enhancement "${entry.name}" has no owning-detachment comment — skipped (Legends/unlisted content?)`)
-          continue
-        }
-        const list = byOwner.get(owner) ?? []
-        list.push(enhancementFromEntry(entry, owner))
-        byOwner.set(owner, list)
-        const refs = refsByOwner.get(owner) ?? new Set<string>()
-        for (const id of conditionChildIds(entry)) refs.add(id)
-        refsByOwner.set(owner, refs)
-      }
+      if (!isEnhancementGroup(group.name)) continue
+      collect(group, undefined, false)
     }
   }
-  return [...byOwner.entries()].map(([comment, enhancements]) => ({
-    comment,
-    enhancements,
-    referencedIds: refsByOwner.get(comment),
-  }))
+  return [
+    ...[...byOwner.entries()].map(([comment, enhancements]) => ({
+      comment,
+      enhancements,
+      referencedIds: refsByOwner.get(comment),
+    })),
+    ...ownerless,
+  ]
 }
 
 /**
@@ -397,21 +424,50 @@ export function extractEnhancements(ownedCatalogues: Catalogue[]): EnhancementGr
  * enhancements to the wrong detachment is worse than omitting them. Likewise a group matching zero detachments is
  * logged and skipped (comment text that doesn't resolve, e.g. a BSData-internal shorthand).
  */
-export function matchEnhancementGroups(groups: EnhancementGroup[], detachments: Detachment[]): void {
+export function matchEnhancementGroups(
+  groups: EnhancementGroup[],
+  detachments: Detachment[],
+  opts: { exact?: boolean; quiet?: boolean } = {},
+): void {
   const detachmentTokens = detachments.map(d => ({ det: d, tokens: wordTokens(d.name) }))
+  const attach = (det: Detachment, enhancements: Enhancement[]) => {
+    det.enhancements = [...(det.enhancements ?? []), ...enhancements]
+  }
   for (const group of groups) {
+    if (group.comment === '') {
+      // Ownerless entry: its owner is the (single) detachment its visibility is gated on.
+      const gated = detachmentTokens.filter(({ det }) => det.id && group.referencedIds?.has(det.id))
+      if (gated.length === 1) attach(gated[0].det, group.enhancements)
+      else if (!opts.quiet) {
+        console.warn(
+          `  ⚠ enhancement "${group.enhancements[0]?.name}" has no owning-detachment comment and ` +
+            `${gated.length === 0 ? 'no gating detachment' : 'several gating detachments'} — skipped (Legends/unlisted content?)`,
+        )
+      }
+      continue
+    }
     const groupTokens = wordTokens(group.comment)
-    let candidates = detachmentTokens.filter(({ tokens }) => isSubsetOf(groupTokens, tokens))
+    let candidates = detachmentTokens.filter(({ tokens }) =>
+      opts.exact ? isSubsetOf(groupTokens, tokens) && isSubsetOf(tokens, groupTokens) : isSubsetOf(groupTokens, tokens),
+    )
     if (candidates.length > 1 && group.referencedIds) {
       const gated = candidates.filter(({ det }) => det.id && group.referencedIds!.has(det.id))
       if (gated.length === 1) candidates = gated
     }
+    if (candidates.length > 1) {
+      // A comment that is the whole name of one detachment ("Warhost") beats the longer names
+      // that merely contain it ("Armoured Warhost").
+      const exact = candidates.filter(({ tokens }) => isSubsetOf(tokens, groupTokens))
+      if (exact.length === 1) candidates = exact
+    }
     if (candidates.length === 1) {
-      candidates[0].det.enhancements = group.enhancements
+      attach(candidates[0].det, group.enhancements)
     } else if (candidates.length === 0) {
-      console.warn(
-        `  ⚠ ${group.enhancements.length} enhancement(s) with comment "${group.comment}" match no detachment — skipped`,
-      )
+      if (!opts.quiet) {
+        console.warn(
+          `  ⚠ ${group.enhancements.length} enhancement(s) with comment "${group.comment}" match no detachment — skipped`,
+        )
+      }
     } else {
       console.warn(
         `  ⚠ ${group.enhancements.length} enhancement(s) with comment "${group.comment}" match ` +
@@ -529,6 +585,7 @@ export function extractDetachments(
   ownedCatalogues: Catalogue[],
   index: BsIndex,
   primaryCatalogueId: string,
+  importedCatalogues: Catalogue[] = [],
 ): Detachment[] {
   const detachments: Detachment[] = []
   const seenDetachmentIds = new Set<string>()
@@ -541,6 +598,14 @@ export function extractDetachments(
   }
 
   matchEnhancementGroups(extractEnhancements(ownedCatalogues), detachments)
+
+  // Some factions keep their enhancements in an imported library (Tyranids and Genestealer
+  // Cults share `Library - Tyranids`). Scan those only for detachments still lacking any, and
+  // only on an exact name match, so an ally library can't attach a lookalike's enhancements.
+  const bare = detachments.filter(d => !d.enhancements?.length)
+  if (bare.length > 0 && importedCatalogues.length > 0) {
+    matchEnhancementGroups(extractEnhancements(importedCatalogues), bare, { exact: true, quiet: true })
+  }
 
   return detachments
 }

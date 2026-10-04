@@ -143,3 +143,73 @@ describe('Detachment scoping', () => {
     expect(names(gsc)).not.toContain('Invasion Fleet') // Tyranids
   })
 })
+
+describe('Committed data quality (all factions)', () => {
+  const dir = join(process.cwd(), 'public', 'data')
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as {
+    factions: { factionId: string }[]
+  }
+  const shared = new Map<string, { detachments: Detachment[] }>()
+  const sharedFor = (id: string) => {
+    if (!shared.has(id)) shared.set(id, JSON.parse(readFileSync(join(dir, 'shared', `${id}.json`), 'utf8')))
+    return shared.get(id)!
+  }
+  const all = manifest.factions.map(({ factionId }) => {
+    const artifact = JSON.parse(readFileSync(join(dir, 'factions', `${factionId}.json`), 'utf8')) as FactionArtifact
+    const detachments = [
+      ...artifact.detachments,
+      ...(artifact.sharedDetachments ?? []).flatMap((id) => sharedFor(id).detachments),
+    ]
+    return { factionId, artifact, detachments }
+  })
+
+  it('has enhancements for every faction that has detachments', () => {
+    // Regression: the nested "Enhancements → <Detachment> Enhancements" BSData layout used to be
+    // missed, leaving Orks / Grey Knights / T'au / Tyranids / GSC / Agents with none.
+    const empty = all
+      .filter(({ detachments }) => detachments.length > 0)
+      .filter(({ detachments }) => detachments.every((d) => !d.enhancements?.length))
+      .map(({ factionId }) => factionId)
+    expect(empty).toEqual([])
+  })
+
+  it('gives Orks their War Horde enhancement and flags upgrade-kind ones', () => {
+    const orks = all.find((f) => f.factionId === 'orks')!
+    const warHorde = orks.detachments.find((d) => d.name === 'War Horde')
+    expect(warHorde?.enhancements?.map((e) => e.name)).toContain("Da Boss Is Watchin'")
+    expect(orks.detachments.flatMap((d) => d.enhancements ?? []).some((e) => e.kind === 'upgrade')).toBe(true)
+  })
+
+  it('flags all three Orks army rules', () => {
+    const orks = all.find((f) => f.factionId === 'orks')!
+    expect(orks.artifact.glossary.filter((g) => g.armyRule).map((g) => g.name).sort()).toEqual(
+      ['Da Boss', 'Unstable Energies', 'Waaagh!'].sort(),
+    )
+  })
+
+  it('gives every stratagem timing, effect and a summary (no scraper label loss)', () => {
+    const thin = all.flatMap(({ factionId, detachments }) =>
+      detachments.flatMap((d) =>
+        (d.stratagems ?? [])
+          .filter((s) => !s.timing || !s.effect || !s.summary)
+          .map((s) => `${factionId} / ${d.name} / ${s.name}`),
+      ),
+    )
+    expect(thin).toEqual([])
+  })
+
+  it('has no stray whitespace in names or stat values', () => {
+    const bad: string[] = []
+    const walk = (node: unknown, where: string, key?: string) => {
+      if (Array.isArray(node)) return node.forEach((n) => walk(n, where))
+      if (!node || typeof node !== 'object') return
+      for (const [k, v] of Object.entries(node)) {
+        if (typeof v === 'string' && k === 'name' && (v !== v.trim() || /\s{2,}/.test(v))) bad.push(`${where}: name ${JSON.stringify(v)}`)
+        else if (typeof v === 'string' && key === 'stats' && v !== v.trim()) bad.push(`${where}: stat ${k}=${JSON.stringify(v)}`)
+        else walk(v, where, k)
+      }
+    }
+    for (const { factionId, artifact } of all) walk(artifact, factionId)
+    expect(bad.slice(0, 10)).toEqual([])
+  })
+})

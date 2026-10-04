@@ -162,11 +162,21 @@ function splitSections(bodyHtml: string): {
   effect: string
   restrictions: string
 } {
-  const re = /<b>\s*([A-Z][A-Z ]*?)\s*:\s*<\/b>/g
+  // The colon sits inside the tag (<b>WHEN:</b>) on most cards and outside it (<b>WHEN</b>:) on a few.
+  const re = /<b>\s*([A-Z][A-Z ]*?)\s*(?::\s*<\/b>|<\/b>\s*:)/g
   const marks: { label: string; bodyStart: number; labelStart: number }[] = []
   let m: RegExpExecArray | null
   while ((m = re.exec(bodyHtml))) {
     marks.push({ label: m[1].trim(), labelStart: m.index, bodyStart: re.lastIndex })
+  }
+  // Some cards (a few Boarding Actions stratagems) render their labels as plain text rather
+  // than <b>…</b>: "WHEN: …<br><br>TARGET: …". Fall back to labels that open a line, so a
+  // mid-sentence "TYRANID:" can't be mistaken for one.
+  if (marks.length === 0) {
+    const plain = /(?:^|<br\s*\/?>\s*)([A-Z][A-Z ]*?)\s*:\s+/g
+    while ((m = plain.exec(bodyHtml))) {
+      marks.push({ label: m[1].trim(), labelStart: m.index, bodyStart: plain.lastIndex })
+    }
   }
 
   let timing = ''

@@ -32,6 +32,18 @@ into small, self-contained per-faction JSON artifacts committed under `public/da
     1st Company Task Force for Black Templars). Different factions must never blend detachments.
     Without this, factions leak each other's detachments and the 12 SM chapters each store the full
     53-detachment union.
+- **Enhancement extraction (offline)** — `extractEnhancements` / `matchEnhancementGroups` in
+  `lib/ingest/detachments.ts`. BSData uses three layouts, all handled: flat `<Detachment>
+  Enhancements` groups, a bare `Enhancements` pool whose entries carry a `comment` naming the
+  detachment (Necrons), and a *nested* layout — top-level `Enhancements` + `Enhancements -
+  Upgrades` groups whose child groups are the per-detachment ones (Orks, Grey Knights, T'au, the
+  AM / Tyranids / Aeldari libraries, most of the SM codex; the walk recurses and tags `kind:
+  'upgrade'`). Entries with no owner at all (Agents of the Imperium) are attributed via the single
+  detachment id their `hidden` modifier is gated on. A faction whose detachments still have none
+  after its owned catalogues also scans its *imported* catalogues (`Library - Tyranids` holds both
+  Tyranid and GSC enhancements), exact-name only. Matching ties: visibility-gate id, then
+  whole-name equality ("Warhost" beats "Armoured Warhost"); anything still ambiguous is skipped
+  with a warning. `lib/data/__tests__/artifacts.test.ts` fails if any faction ends up with none.
 - **Ability visibility gating (offline)** — `lib/ingest/visibility.ts`. BSData hides many unit
   abilities behind `hidden` modifiers rather than omitting them: detachment abilities linked onto
   every eligible datasheet (Gloam Rot on Nurgle daemons → Shadow Legion; each Necron detachment
@@ -54,7 +66,9 @@ into small, self-contained per-faction JSON artifacts committed under `public/da
   for pages shared by >1 faction (only `space-marines`, served to all 12 chapters), so one
   chapter's page cannot re-introduce another chapter's detachments and undo the scoping above. Kept
   separate from the BSData CLI so the two sources refresh independently and stratagems need no
-  GitHub token. Universal stratagems (Command Re-roll, Fire Overwatch, …) are maintained by hand in
+  GitHub token. Stratagem card labels come in three markups (`<b>WHEN:</b>`, `<b>WHEN</b>:`, plain `WHEN:` after a
+  `<br>`) — `splitSections` handles all; a card with an empty `timing`/`effect` means a new variant
+  (guarded by the artifacts test). Universal stratagems (Command Re-roll, Fire Overwatch, …) are maintained by hand in
   `lib/data/coreStratagems.ts`, not scraped.
 - **Shared-detachment de-duplication (offline)** — `lib/ingest/dedupCli.ts`. Runs last (after
   Wahapedia). Detachments that end up byte-identical across ≥2 factions — the generic Codex: Space
@@ -97,8 +111,9 @@ into small, self-contained per-faction JSON artifacts committed under `public/da
 4. `npm run ingest:summarise -- [--factions <slug,slug|all>] [--no-interactive]` to write
    mechanical `summary` fields onto every stratagem. Run after dedup — it reads the final artifacts
    and patches them in place. Previously-generated summaries are cached in
-   `docs/summary-overrides.json` so re-runs are instant for unchanged effects. Requires
-   `ANTHROPIC_API_KEY`. **Must be re-run after every Wahapedia ingest**, because step 2 clears any
+   `docs/summary-overrides.json` (keyed by `sha256(effect)[0:12]`) so re-runs are instant for unchanged
+   effects. `ANTHROPIC_API_KEY` is only needed when new/changed effects have no cached summary — with
+   none uncached, the step runs offline, and without a key it aborts *before writing anything*. **Must be re-run after every Wahapedia ingest**, because step 2 clears any
    summary fields that were set by a previous summarise run.
 5. `npm run ingest:armyrules -- [--factions <slug,slug|all>] [--dry-run]` to tag each
    faction's army rule(s) in the glossary (`glossary[].armyRule`) from the curated allowlist
