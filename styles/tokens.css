@@ -1,9 +1,12 @@
 /* ─────────────────────────────────────────────────────────────
    BATTLEFLOW · DESIGN TOKENS
-   Dark "field manual" surface system.
+   Dark "field manual" surface system, with a light override
+   toggled via <html data-theme="light">.
    ───────────────────────────────────────────────────────────── */
 
 :root {
+  color-scheme: dark;
+
   /* SURFACE */
   --bg-canvas:     #0a0b0e;
   --bg-app:        #0e1014;
@@ -11,6 +14,7 @@
   --surface-2:     #1a1e26;
   --surface-3:     #21262f;
   --overlay:       rgba(8,10,14,0.72);
+  --bg-app-translucent: rgba(14,16,20,0.92);
 
   /* BORDERS */
   --border-faint:  #1d212a;
@@ -29,6 +33,7 @@
   --signal:        oklch(0.79 0.13 75);
   --signal-dim:    oklch(0.79 0.13 75 / 0.16);
   --signal-line:   oklch(0.79 0.13 75 / 0.32);
+  --signal-hover:  oklch(0.79 0.13 75 / 0.24);
 
   --modifier:      oklch(0.78 0.07 220);
   --modifier-dim:  oklch(0.78 0.07 220 / 0.14);
@@ -82,6 +87,56 @@
   --elev-1:      inset 0 1px 0 rgba(255,255,255,0.03), 0 1px 2px rgba(0,0,0,0.3);
   --elev-2:      inset 0 1px 0 rgba(255,255,255,0.04), 0 6px 18px rgba(0,0,0,0.4);
   --elev-drawer: 0 -20px 40px rgba(0,0,0,0.5), inset 0 -1px 0 var(--border);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   LIGHT THEME — same hues, lightness lowered for contrast on white
+   ───────────────────────────────────────────────────────────── */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-canvas:     #eef0f3;
+  --bg-app:        #f6f7f9;
+  --surface-1:     #ffffff;
+  --surface-2:     #f1f3f6;
+  --surface-3:     #e6e9ee;
+  --overlay:       rgba(20,24,32,0.40);
+  --bg-app-translucent: rgba(246,247,249,0.92);
+
+  --border-faint:  #e4e7ec;
+  --border:        #d5d9e0;
+  --border-strong: #aab1bd;
+  --hairline:      rgba(0,0,0,0.06);
+
+  --fg:            #14171d;
+  --fg-soft:       #2f3541;
+  --fg-mute:       #5d6472;
+  --fg-dim:        #6f7684;
+  --fg-stat:       #3a404c;
+
+  --signal:        oklch(0.52 0.13 70);
+  --signal-dim:    oklch(0.52 0.13 70 / 0.12);
+  --signal-line:   oklch(0.52 0.13 70 / 0.34);
+  --signal-hover:  oklch(0.52 0.13 70 / 0.20);
+
+  --modifier:      oklch(0.48 0.08 220);
+  --modifier-dim:  oklch(0.48 0.08 220 / 0.12);
+  --modifier-line: oklch(0.48 0.08 220 / 0.32);
+
+  --warn:          oklch(0.52 0.17 30);
+  --warn-dim:      oklch(0.52 0.17 30 / 0.12);
+  --warn-line:     oklch(0.52 0.17 30 / 0.32);
+
+  --good:          oklch(0.46 0.10 160);
+  --good-dim:      oklch(0.46 0.10 160 / 0.12);
+
+  --melee:         oklch(0.50 0.09 30);
+  --ranged:        oklch(0.48 0.10 250);
+
+  --elev-1:      0 1px 2px rgba(20,24,32,0.08), 0 0 0 1px rgba(20,24,32,0.02);
+  --elev-2:      0 6px 18px rgba(20,24,32,0.12);
+  --elev-drawer: 0 -12px 32px rgba(20,24,32,0.16), inset 0 -1px 0 var(--border);
 }
 
 /* ─────────────────────────────────────────────────────────────

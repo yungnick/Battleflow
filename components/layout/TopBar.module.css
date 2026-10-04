@@ -110,7 +110,7 @@
 .cpMax { color: var(--fg-dim); font-size: 10px; }
 .cpLabel { color: var(--fg-mute); font-size: 9px; margin-left: 3px; letter-spacing: 0.08em; }
 
-.settingsBtn {
+.themeBtn {
   width: 30px;
   height: 30px;
   background: var(--surface-1);
@@ -122,3 +122,10 @@
   cursor: pointer;
   color: var(--fg-soft);
 }
+
+.themeBtn:hover { color: var(--fg); border-color: var(--border); }
+
+/* Show the sun in dark mode (click → light) and the moon in light mode (click → dark). */
+.moon { display: none; }
+:global(:root[data-theme="light"]) .sun { display: none; }
+:global(:root[data-theme="light"]) .moon { display: block; }

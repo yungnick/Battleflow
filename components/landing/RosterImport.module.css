@@ -68,7 +68,7 @@
 }
 
 .submit:hover:not(:disabled) {
-  background: oklch(0.79 0.13 75 / 0.24);
+  background: var(--signal-hover);
 }
 
 .submit:disabled {

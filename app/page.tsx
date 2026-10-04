@@ -1,4 +1,5 @@
 import { RosterImport } from '@/components/landing/RosterImport'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 
 export default function Home() {
   return (
@@ -12,6 +13,10 @@ export default function Home() {
       padding: '40px 20px',
       fontFamily: 'var(--f-ui)',
     }}>
+      <div style={{ position: 'absolute', top: 16, right: 16 }}>
+        <ThemeToggle />
+      </div>
+
       <div style={{ textAlign: 'center' }}>
         <h1 style={{
           fontFamily: 'var(--f-display)',

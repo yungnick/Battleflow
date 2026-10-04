@@ -1,5 +1,5 @@
 .nav {
-  background: rgba(14, 16, 20, 0.92);
+  background: var(--bg-app-translucent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid var(--border-faint);
