@@ -299,6 +299,12 @@ function MiniProfile({ stats, phase }: { stats?: Stats; phase?: PhaseId }) {
  *    Sweep / …); the base name lives in the group header above, and
  *    `indented` shifts the row to align under it.
  */
+/** "3×" prefix for a weapon the list fields more than once; renders nothing for a single one. */
+function WeaponCount({ count }: { count?: number }) {
+  if (!count || count < 2) return null
+  return <span className={styles.weaponCount}>{count}×</span>
+}
+
 function CompactWeaponRow({
   displayName, weapon, unit, onOpen, indented,
 }: {
@@ -314,7 +320,10 @@ function CompactWeaponRow({
       className={`bf-press ${styles.weaponRow}${indented ? ' ' + styles.weaponRowIndented : ''}`}
       onClick={() => onOpen({ kind: 'weapon', data: weapon, unit })}
     >
-      <span className={styles.weaponName}>{displayName}</span>
+      <span className={styles.weaponName}>
+        {!indented && <WeaponCount count={weapon.count} />}
+        {displayName}
+      </span>
       <StatRow stats={weapon.stats} />
       {weapon.tags.length > 0 && (
         <div className={styles.weaponTags}>
@@ -347,7 +356,10 @@ function WeaponGroupView({
   return (
     <div className={styles.multiGroup}>
       <div className={styles.multiHeader}>
-        <span className={styles.weaponName}>{group.baseName}</span>
+        <span className={styles.weaponName}>
+          <WeaponCount count={group.profiles[0].weapon.count} />
+          {group.baseName}
+        </span>
         <span className={styles.chooseOne}>(choose one)</span>
       </div>
       <div className={styles.multiProfiles}>

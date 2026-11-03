@@ -18,7 +18,12 @@ export function WeaponProfileRow({ weapon, unit, onOpen }: Props) {
       onClick={() => onOpen({ kind: 'weapon', data: weapon, unit })}
     >
       <div className={styles.header}>
-        <span className={styles.name}>{weapon.name}</span>
+        <span className={styles.name}>
+          {weapon.count && weapon.count > 1 && (
+            <span className={styles.count}>{weapon.count}×</span>
+          )}
+          {weapon.name}
+        </span>
         <KindTag kind={weapon.kind} />
       </div>
 

@@ -46,7 +46,9 @@ const FIRST_BATTLE_ROUND_RE = /\bfirst battle round\b/i
 
 const PHASE_PATTERNS: Record<PhaseId, RegExp[]> = {
   command:     [/\bcommand\b/i, ROUND_START_RE, FIRST_BATTLE_ROUND_RE],
-  movement:    [/\bmovement\b/i, /\badvances\b/i],
+  // "ingress move" is 11e's term for arriving from reserves (Deep Strike, Infiltrators-style
+  // abilities): it happens in the Movement phase though the text never says so.
+  movement:    [/\bmovement\b/i, /\badvances\b/i, /\bingress moves?\b/i],
   shooting:    [/\bshooting\b/i, /\bshoots\b/i],
   charge:      [/\bcharge\b/i, /\bdeclares a charge\b/i],
   fight:       [/\bfight\b/i, /\bfights\b/i],
@@ -65,12 +67,22 @@ const ALL_PHASES: readonly PhaseId[] = PHASE_IDS
 export function abilityPhasesFor(
   ability: { effect: string; timing?: string },
 ): Set<PhaseId> {
+  const matched = explicitAbilityPhases(ability)
+  return matched.size === 0 ? new Set(ALL_PHASES) : matched
+}
+
+/**
+ * Phases an ability's prose names outright. Unlike {@link abilityPhasesFor}, a passive
+ * ability (no phase named) yields an empty set instead of "every phase" — used to tell
+ * "this ability is actively used in phase X" from "this ability merely applies in X".
+ */
+export function explicitAbilityPhases(
+  ability: { effect: string; timing?: string },
+): Set<PhaseId> {
   const text = `${ability.effect} ${ability.timing ?? ''}`
   const matched = new Set<PhaseId>()
-
   for (const phase of PHASE_IDS) {
     if (PHASE_PATTERNS[phase].some(p => p.test(text))) matched.add(phase)
   }
-
-  return matched.size === 0 ? new Set(ALL_PHASES) : matched
+  return matched
 }

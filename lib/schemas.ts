@@ -69,6 +69,8 @@ export const WeaponSchema = z.object({
   /** Keyword tags from the "Keywords" characteristic (e.g. "Rapid Fire 1"). */
   tags: z.array(z.string()),
   mods: z.array(ModifierSchema),
+  /** Roster-time only: how many of this weapon the army list fields (never set in artifacts). */
+  count: z.number().optional(),
 })
 
 /**
