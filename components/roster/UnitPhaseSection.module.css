@@ -316,6 +316,12 @@
   color: var(--fg);
 }
 
+.weaponCount {
+  font-family: var(--f-mono);
+  font-weight: 700;
+  margin-right: 6px;
+}
+
 .weaponTags {
   display: flex;
   flex-wrap: wrap;

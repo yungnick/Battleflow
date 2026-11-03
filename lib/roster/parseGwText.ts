@@ -5,6 +5,8 @@ export type ParsedUnit = {
   points?: number
   /** Weapon names extracted from count-prefixed bullets (Nx ...) and indented sub-model lines. */
   wargear: string[]
+  /** Total per weapon (keyed by normalised name), summed across every "Nx Weapon" line. */
+  wargearCounts?: Record<string, number>
   /** Enhancement names from bare-name or (+N pts) bullets without a count prefix. */
   enhancements: string[]
 }
@@ -15,6 +17,15 @@ export type ParsedArmy = {
   detachment?: string
   totalPoints?: number
   units: ParsedUnit[]
+}
+
+/** Record one wargear line: push the name, and add its "Nx" prefix (default 1) to the tally. */
+function addWargear(wargear: string[], counts: Record<string, number>, content: string) {
+  const cm = content.match(/^(\d+)x\s+(.+)$/i)
+  const name = cm ? cm[2].trim() : content
+  wargear.push(name)
+  const key = norm(name)
+  counts[key] = (counts[key] ?? 0) + (cm ? parseInt(cm[1], 10) : 1)
 }
 
 // Matches section headers: CHARACTERS, BATTLELINE, OTHER DATASHEETS, etc.
@@ -288,6 +299,7 @@ function parsePlainBlock(
   if (!isFinite(minIndent)) minIndent = 0
 
   const wargear: string[] = []
+  const wargearCounts: Record<string, number> = {}
   const enhancements: string[] = []
 
   for (const line of bulletLines) {
@@ -303,8 +315,7 @@ function parsePlainBlock(
 
     if (indent > minIndent) {
       // Sub-model line
-      const cm = content.match(/^(\d+)x\s+(.+)$/i)
-      wargear.push(cm ? cm[2].trim() : content)
+      addWargear(wargear, wargearCounts, content)
       continue
     }
 
@@ -314,8 +325,7 @@ function parsePlainBlock(
 
     if (norm(content) === 'warlord') continue
 
-    const cm = content.match(/^(\d+)x\s+(.+)$/i)
-    if (cm) { wargear.push(cm[2].trim()); continue }
+    if (/^\d+x\s+.+$/i.test(content)) { addWargear(wargear, wargearCounts, content); continue }
 
     // "(+N pts)" enhancement suffix
     const enhPts = content.match(/^(.+?)\s*\(\+\d+\s*pts?\)\s*$/i)
@@ -326,7 +336,7 @@ function parsePlainBlock(
     enhancements.push(content)
   }
 
-  return { name, points, wargear, enhancements }
+  return { name, points, wargear, wargearCounts, enhancements }
 }
 
 function parseBlock(lines: string[]): ParsedUnit | null {
@@ -354,6 +364,7 @@ function parseBlock(lines: string[]): ParsedUnit | null {
   if (!name) return null
 
   const wargear: string[] = []
+  const wargearCounts: Record<string, number> = {}
   const enhancements: string[] = []
 
   for (const line of lines.slice(1)) {
@@ -370,8 +381,7 @@ function parseBlock(lines: string[]): ParsedUnit | null {
 
     if (isIndented) {
       // Strip optional count prefix on sub-model lines
-      const cm = content.match(/^(\d+)x\s+(.+)$/i)
-      wargear.push(cm ? cm[2].trim() : content)
+      addWargear(wargear, wargearCounts, content)
       continue
     }
 
@@ -379,9 +389,8 @@ function parseBlock(lines: string[]): ParsedUnit | null {
     if (norm(content) === 'warlord') continue
 
     // Count-prefixed bullet → wargear
-    const cm = content.match(/^(\d+)x\s+(.+)$/i)
-    if (cm) {
-      wargear.push(cm[2].trim())
+    if (/^\d+x\s+.+$/i.test(content)) {
+      addWargear(wargear, wargearCounts, content)
       continue
     }
 
@@ -390,5 +399,5 @@ function parseBlock(lines: string[]): ParsedUnit | null {
     enhancements.push(enhMatch ? enhMatch[1].trim() : content)
   }
 
-  return { name, points, wargear, enhancements }
+  return { name, points, wargear, wargearCounts, enhancements }
 }

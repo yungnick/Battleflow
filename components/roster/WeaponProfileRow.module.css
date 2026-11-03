@@ -17,6 +17,13 @@
   letter-spacing: -0.01em;
 }
 
+.count {
+  font-family: var(--f-mono);
+  font-weight: 700;
+  color: var(--accent, var(--fg));
+  margin-right: 6px;
+}
+
 .tags {
   display: flex;
   flex-wrap: wrap;

@@ -4,9 +4,9 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { parseGwText } from '@/lib/roster/parseGwText'
 import type { ParsedArmy } from '@/lib/roster/parseGwText'
-import { buildRoster } from '@/lib/roster/buildRoster'
+import { buildRoster, resolveAllies } from '@/lib/roster/buildRoster'
 import { saveRoster } from '@/lib/roster/storage'
-import { loadManifest, loadFaction } from '@/lib/data/loader'
+import { loadManifest, loadFaction, loadAllies } from '@/lib/data/loader'
 import type { DataManifest } from '@/lib/dataModel'
 import { norm } from '@/lib/roster/normalize'
 import styles from './RosterImport.module.css'
@@ -37,7 +37,9 @@ export function RosterImport() {
     setState({ kind: 'loading', step: `Loading ${match.factionName}…` })
     try {
       const artifact = await loadFaction(match, manifest)
-      const { roster, meta } = buildRoster(parsed, artifact)
+      const allies = await resolveAllies(parsed, artifact, (unmatched, matches) =>
+        loadAllies(artifact, manifest, unmatched, matches))
+      const { roster, meta } = buildRoster(parsed, artifact, allies)
       const isEmpty = Object.values(roster).every(units => !units?.length)
       if (isEmpty) {
         setPickerError(`No units matched in "${match.factionName}". Unit names must match the datasheet exactly. Check your army list text.`)
@@ -109,7 +111,9 @@ export function RosterImport() {
       setState({ kind: 'loading', step: `Loading ${match.factionName}…` })
       const artifact = await loadFaction(match, manifest)
 
-      const { roster, meta } = buildRoster(parsed, artifact)
+      const allies = await resolveAllies(parsed, artifact, (unmatched, matches) =>
+        loadAllies(artifact, manifest, unmatched, matches))
+      const { roster, meta } = buildRoster(parsed, artifact, allies)
 
       // Guard against a roster where every phase is empty (all unit names missed).
       // Surface a clear error rather than navigating to a blank screen.

@@ -2,7 +2,7 @@ import type { DetachmentRule, FactionArtifact, GlossaryRule, PreparedUnit } from
 import type { PhaseId, Roster, Rule, Stats, Strat, UnitAbility, Unit, Weapon } from '../types'
 import type { ParsedArmy } from './parseGwText'
 import { norm } from './normalize'
-import { abilityPhasesFor } from './abilityPhase'
+import { abilityPhasesFor, explicitAbilityPhases } from './abilityPhase'
 import { findPlainInvulnSave, stripPlainInvulnSave, withInvulnSv } from './invulnSave'
 
 const NON_WEAPON_PHASES: PhaseId[] = ['command', 'movement', 'charge', 'battleshock']
@@ -112,14 +112,34 @@ function matchUnit(name: string, units: PreparedUnit[]): PreparedUnit | undefine
  *  BSData names multi-profile weapons with a leading ➤ and a " - <profile>" suffix
  *  (e.g. "➤ Great axe of Khorne - strike"). Army list exports name the weapon without
  *  those decorations, so we also match against the stripped base name. */
-function filterWeapons(weapons: Weapon[], wargearSet: Set<string>): Weapon[] {
+function filterWeapons(
+  weapons: Weapon[],
+  wargearSet: Set<string>,
+  counts: Record<string, number> = {},
+): Weapon[] {
   if (wargearSet.size === 0) return weapons
-  return weapons.filter(w => {
-    if (wargearSet.has(norm(w.name))) return true
-    if (!w.name.startsWith('➤')) return false
-    const base = norm(w.name.replace(/^➤\s*/, '').replace(/\s+-\s+.+$/, ''))
-    return wargearSet.has(base)
-  })
+  // Exports and datasheets disagree on plurals ("Improvised weapon" vs "Improvised weapons"),
+  // so compare on a singularised key as well as the exact one.
+  const stemSet = new Set([...wargearSet].map(weaponStem))
+  const stemCounts = new Map<string, number>()
+  for (const [k, n] of Object.entries(counts)) stemCounts.set(weaponStem(k), (stemCounts.get(weaponStem(k)) ?? 0) + n)
+  const out: Weapon[] = []
+  for (const w of weapons) {
+    const exact = norm(w.name)
+    const base = w.name.startsWith('➤')
+      ? norm(w.name.replace(/^➤\s*/, '').replace(/\s+-\s+.+$/, ''))
+      : exact
+    const stem = weaponStem(base)
+    if (!wargearSet.has(exact) && !wargearSet.has(base) && !stemSet.has(stem)) continue
+    const count = counts[exact] ?? counts[base] ?? stemCounts.get(stem)
+    out.push(count && count > 1 ? { ...w, count } : w)
+  }
+  return out
+}
+
+/** Singularise each word of a normalised weapon name ("improvised weapons" → "improvised weapon"). */
+function weaponStem(name: string): string {
+  return name.split(' ').map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w)).join(' ')
 }
 
 /**
@@ -222,6 +242,11 @@ function dedupByName<T extends { name: string }>(items: T[]): T[] {
   })
 }
 
+/** Parsed unit names that the army's own faction artifact cannot resolve — candidates for allies. */
+export function unmatchedUnitNames(parsed: ParsedArmy, artifact: FactionArtifact): string[] {
+  return parsed.units.filter(u => !matchUnit(u.name, artifact.units)).map(u => u.name)
+}
+
 export type RosterMeta = {
   factionName: string
   detachment?: string
@@ -250,6 +275,7 @@ export type RosterMeta = {
 export function buildRoster(
   parsed: ParsedArmy,
   artifact: FactionArtifact,
+  allies: FactionArtifact[] = [],
 ): { roster: Roster; meta: RosterMeta } {
   const roster: Roster = {}
   const meta: RosterMeta = {
@@ -288,11 +314,14 @@ export function buildRoster(
   const activeDetachmentIds = new Set(matchedDetachments.map(d => d.id))
 
   for (const parsedUnit of parsed.units) {
+    // Allied units (e.g. a Knight Despoiler in a Death Guard list) live in another
+    // faction's artifact; the army's own faction always wins a name clash.
     const matched = matchUnit(parsedUnit.name, artifact.units)
+      ?? allies.reduce<PreparedUnit | undefined>((hit, a) => hit ?? matchUnit(parsedUnit.name, a.units), undefined)
     if (!matched) continue
 
     const wargearSet = new Set(parsedUnit.wargear.map(norm))
-    const filteredWeapons = filterWeapons(matched.weapons, wargearSet)
+    const filteredWeapons = filterWeapons(matched.weapons, wargearSet, parsedUnit.wargearCounts)
 
     // The v2 structured abilities the card renders: every category except the
     // army-level `faction` rule. The Damaged profile rides on `matched.damaged`,
@@ -404,14 +433,35 @@ export function buildRoster(
       roster[phase] = [...(roster[phase] ?? []), phaseUnit(phase, [])]
     }
 
-    // Weapon phases: only include the unit if it has at least one weapon of
-    // the matching kind after wargear filtering.
+    // Weapon phases: include the unit if it has at least one weapon of the matching kind
+    // after wargear filtering, or an ability whose prose explicitly names the phase —
+    // e.g. a Psyker with "In your Shooting phase, … mortal wounds" but no ranged weapon.
+    // Passive abilities don't qualify, or every unit would crowd into every phase.
+    const explicitPhases = new Set(base.abilities.flatMap(a => [...explicitAbilityPhases(a)]))
     for (const { phase, kind } of WEAPON_PHASES) {
       const kindWeapons = filteredWeapons.filter(w => w.kind === kind)
-      if (kindWeapons.length === 0) continue
+      if (kindWeapons.length === 0 && !explicitPhases.has(phase)) continue
       roster[phase] = [...(roster[phase] ?? []), phaseUnit(phase, kindWeapons)]
     }
   }
 
   return { roster, meta }
+}
+
+/** Whether `artifact` can resolve a parsed unit name (used to pick ally factions). */
+export function artifactHasUnit(name: string, artifact: FactionArtifact): boolean {
+  return matchUnit(name, artifact.units) !== undefined
+}
+
+/**
+ * Resolve any allied units the primary faction can't, loading ally artifacts on demand.
+ * Returns an empty list (no network) when every unit already matches.
+ */
+export async function resolveAllies(
+  parsed: ParsedArmy,
+  artifact: FactionArtifact,
+  loadAlliesFn: (unmatched: string[], matches: typeof artifactHasUnit) => Promise<FactionArtifact[]>,
+): Promise<FactionArtifact[]> {
+  const unmatched = unmatchedUnitNames(parsed, artifact)
+  return unmatched.length ? loadAlliesFn(unmatched, artifactHasUnit) : []
 }

@@ -152,3 +152,10 @@ describe('abilityPhasesFor – timing field is also scanned', () => {
     expect(phases.has('shooting')).toBe(true)
   })
 })
+
+describe('ingress move', () => {
+  it('puts Deep Strike on Movement only', () => {
+    const phases = abilityPhasesFor({ effect: 'Each time this unit makes an ingress move (20.04), it can be set up anywhere.' })
+    expect([...phases]).toEqual(['movement'])
+  })
+})

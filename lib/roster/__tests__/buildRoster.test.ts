@@ -612,3 +612,47 @@ describe('buildRoster – detachment-gated abilities', () => {
     expect(namesFor(undefined)).toEqual(['Infected Outbreak', 'Plague Ward'])
   })
 })
+
+describe('allied units', () => {
+  it('resolves units missing from the primary faction against ally artifacts', () => {
+    const primary = makeArtifact()
+    const ally = { ...makeArtifact(), factionId: 'chaos-knights', units: [{ ...primary.units[0], id: 'k', name: 'Knight Despoiler' }] }
+    const parsed = { factionKeyword: '', units: [{ name: 'Knight Despoiler', wargear: [], enhancements: [] }] }
+    const { roster } = buildRoster(parsed, primary, [ally])
+    expect(roster.command?.map(u => u.name)).toEqual(['Knight Despoiler'])
+    expect(buildRoster(parsed, primary).roster.command).toBeUndefined()
+  })
+})
+
+describe('weapon counts', () => {
+  it('sums repeated weapon lines onto Weapon.count', () => {
+    const base = makeArtifact()
+    const w = { name: 'Diabolus heavy stubber', kind: 'ranged' as const, stats: {}, tags: [], mods: [] }
+    const art = { ...base, units: [{ ...base.units[0], weapons: [w] }] }
+    const parsed = { factionKeyword: '', units: [{ name: 'Bloodthirster', wargear: ['Diabolus heavy stubber', 'Diabolus heavy stubber', 'Diabolus heavy stubber'], wargearCounts: { 'diabolus heavy stubber': 3 }, enhancements: [] }] }
+    expect(buildRoster(parsed, art).roster.shooting?.[0].weapons[0].count).toBe(3)
+  })
+})
+
+describe('plural weapon names', () => {
+  it('matches "Improvised weapon" in the list to "Improvised weapons" on the datasheet', () => {
+    const base = makeArtifact()
+    const w = { name: 'Improvised weapons', kind: 'melee' as const, stats: {}, tags: [], mods: [] }
+    const art = { ...base, units: [{ ...base.units[0], weapons: [w] }] }
+    const parsed = { factionKeyword: '', units: [{ name: 'Bloodthirster', wargear: ['Improvised weapon'], wargearCounts: { 'improvised weapon': 20 }, enhancements: [] }] }
+    const fight = buildRoster(parsed, art).roster.fight
+    expect(fight?.[0].weapons[0].count).toBe(20)
+  })
+})
+
+describe('phase-specific abilities without weapons', () => {
+  it('lists a unit with no ranged weapon in Shooting when an ability names that phase', () => {
+    const base = makeArtifact()
+    const ability = { name: 'Eater Plague (Psychic)', timing: '', effect: 'In your Shooting phase, select one enemy unit.', source: 'x', category: 'datasheet' as const }
+    const art = { ...base, units: [{ ...base.units[0], weapons: [], abilities: [ability] }] }
+    const parsed = { factionKeyword: '', units: [{ name: 'Bloodthirster', wargear: [], enhancements: [] }] }
+    const { roster } = buildRoster(parsed, art)
+    expect(roster.shooting?.[0].abilities.map(a => a.name)).toContain('Eater Plague (Psychic)')
+    expect(roster.fight).toBeUndefined()
+  })
+})

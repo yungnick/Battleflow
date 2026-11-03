@@ -46,3 +46,40 @@ export async function loadFaction(
   }
   return artifact
 }
+
+/** Factions that can appear as allies in another army's list, most common first. */
+const ALLY_FACTION_IDS = [
+  'chaos-knights',
+  'imperial-knights',
+  'agents-of-the-imperium',
+  'astra-militarum',
+  'chaos-daemons',
+  'tyranids',
+  'genestealer-cults',
+]
+
+/**
+ * Load just enough ally factions to resolve the unit names the primary faction could not.
+ * Sequential with early exit so a typical list pulls at most one extra artifact.
+ */
+export async function loadAllies(
+  primary: FactionArtifact,
+  manifest: DataManifest,
+  unmatched: string[],
+  matches: (name: string, artifact: FactionArtifact) => boolean,
+): Promise<FactionArtifact[]> {
+  const allies: FactionArtifact[] = []
+  let remaining = unmatched
+  for (const id of ALLY_FACTION_IDS) {
+    if (remaining.length === 0) break
+    if (id === primary.factionId) continue
+    const entry = manifest.factions.find(f => f.factionId === id)
+    if (!entry) continue
+    const artifact = await loadFaction(entry, manifest)
+    const hits = remaining.filter(n => matches(n, artifact))
+    if (hits.length === 0) continue
+    allies.push(artifact)
+    remaining = remaining.filter(n => !hits.includes(n))
+  }
+  return allies
+}
